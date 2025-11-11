@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>GLB + 虚拟触觉演示 (最终稳定版)</title>
+    <title>GLB + 虚拟触觉演示 (最终六角网格版)</title>
     <style>
         html,
         body {
@@ -98,7 +98,8 @@
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.0/build/index.module.js"
     }
   }
   </script>
@@ -111,11 +112,10 @@
             <label class="btn">选择GLB
                 <input id="file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" />
             </label>
-            <button id="btnResample" class="btn">重新采样</button>
+            <button id="btnResample" class="btn">重新采样 (基于当前视角)</button>
             <button id="btnReset" class="btn">重置视角</button>
             <div class="spacer"></div>
             <label class="switch"><input id="chkAuto" type="checkbox" checked />自动旋转</label>
-            <label class="switch"><input id="chkArrows" type="checkbox" />显示法向箭头</label>
             <label class="switch"><input id="chkBg" type="checkbox" checked />暗色背景</label>
         </header>
 
@@ -134,8 +134,12 @@
         import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
         import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
         import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-        import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
         import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+        import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+
+        THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+        THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+        THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
         const wrap = document.getElementById('viewport');
         const scene = new THREE.Scene();
@@ -158,50 +162,22 @@
         const grid = new THREE.GridHelper(10, 10, 0x334155, 0x1f2937); grid.visible = false; scene.add(grid);
 
         const worldAxes = new THREE.AxesHelper(1.2);
-        worldAxes.material.depthTest = false;
-        worldAxes.renderOrder = 10;
+        worldAxes.material.depthTest = false; worldAxes.renderOrder = 10;
         scene.add(worldAxes);
 
         class TactileLayer {
             constructor(parentMesh, options = {}) {
                 this.mesh = parentMesh;
-                this.targetPointCount = options.targetPointCount ?? 2500;
-                this.range = [0, 25];
-
-                const maxPoints = this.targetPointCount * 2;
+                this.spacing = options.spacing ?? 0.05;
+                const maxPoints = options.maxPoints ?? 5000;
 
                 this.attrCol = new THREE.BufferAttribute(new Float32Array(maxPoints * 3), 3);
                 this.attrInt = new THREE.BufferAttribute(new Float32Array(maxPoints), 1);
 
                 const diskPlane = new THREE.PlaneGeometry(1, 1);
-                const diskVertexShader = `
-                    attribute float radius; attribute float intensity; attribute vec3 nrmW;
-                    uniform vec3 camRight; uniform vec3 camUp; uniform float pushW;
-                    varying vec2 vUv; varying vec3 vColor;
-                    void main(){
-                        vUv = uv; vColor = color;
-                        vec3 center = (instanceMatrix * vec4(0.0,0.0,0.0,1.0)).xyz + normalize(nrmW) * pushW;
-                        float R = radius * (1.0 + 0.9 * intensity);
-                        vec2 quad = (uv - 0.5) * (2.0 * R);
-                        vec3 pos = center + camRight * quad.x + camUp * quad.y;
-                        gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
-                    }`;
-                const diskFragmentShader = `
-                    varying vec2 vUv; varying vec3 vColor;
-                    void main(){
-                        vec2 p = vUv * 2.0 - 1.0;
-                        if(dot(p,p) > 1.0) discard;
-                        gl_FragColor = vec4(vColor, 1.0);
-                    }`;
-                this.matDisks = new THREE.ShaderMaterial({
-                    vertexColors: true, transparent: false, depthTest: true, depthWrite: true,
-                    uniforms: {
-                        camRight: { value: new THREE.Vector3(1, 0, 0) },
-                        camUp: { value: new THREE.Vector3(0, 1, 0) },
-                        pushW: { value: 0.0 }
-                    },
-                    vertexShader: diskVertexShader, fragmentShader: diskFragmentShader
-                });
+                const diskVertex = `attribute float radius;attribute float intensity;attribute vec3 nrmW;uniform vec3 camRight;uniform vec3 camUp;uniform float pushW;varying vec2 vUv;varying vec3 vColor;void main(){vUv=uv;vColor=color;vec3 center=(instanceMatrix*vec4(0.,0.,0.,1.)).xyz+normalize(nrmW)*pushW;float R=radius*(1.+.9*intensity);vec2 quad=(uv-.5)*(2.*R);vec3 pos=center+camRight*quad.x+camUp*quad.y;gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.);}`;
+                const diskFragment = `varying vec2 vUv;varying vec3 vColor;void main(){vec2 p=vUv*2.-1.;if(dot(p,p)>1.)discard;gl_FragColor=vec4(vColor,1.);}`;
+                this.matDisks = new THREE.ShaderMaterial({ vertexColors: !0, transparent: !1, depthTest: !0, depthWrite: !0, uniforms: { camRight: { value: new THREE.Vector3(1, 0, 0) }, camUp: { value: new THREE.Vector3(0, 1, 0) }, pushW: { value: 0 } }, vertexShader: diskVertex, fragmentShader: diskFragment });
 
                 this.disks = new THREE.InstancedMesh(diskPlane, this.matDisks, maxPoints);
                 this.disks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -215,9 +191,7 @@
                 this.disks.renderOrder = 2;
                 scene.add(this.disks);
 
-                this.t = 0;
-                this.running = true;
-                this.finalPoints = [];
+                this.t = 0; this.running = true; this.finalPoints = [];
             }
 
             dispose() {
@@ -226,226 +200,137 @@
                 this.matDisks.dispose();
             }
 
-            async resample(camera) {
-                console.time('Voxel Grid Sampling');
-                document.getElementById('info').textContent = '正在生成均匀点云...';
-                await new Promise(resolve => setTimeout(resolve, 30));
+            async generateHexGrid(camera) {
+                console.time('Hex Grid Generation');
+                document.getElementById('info').textContent = '正在生成六角网格...';
+                await new Promise(r => setTimeout(r, 20));
 
                 this.mesh.updateWorldMatrix(true, true);
-
                 const meshes = [];
-                this.mesh.traverse(o => { if (o.isMesh && o.geometry) meshes.push(o); });
-                if (meshes.length === 0) return;
+                this.mesh.traverse(o => { if (o.isMesh && o.geometry?.attributes?.position) meshes.push(o); });
+                if (!meshes.length) return;
 
-                const geometries = meshes.map(m => m.geometry.clone().applyMatrix4(m.matrixWorld));
-                const mergedGeometry = BufferGeometryUtils.mergeGeometries(geometries, false);
-                if (!mergedGeometry) return;
+                const geos = meshes.map(m => m.geometry.clone().applyMatrix4(m.matrixWorld));
+                const merged = BufferGeometryUtils.mergeGeometries(geos, false);
+                if (!merged) return;
 
-                const sampler = new MeshSurfaceSampler(new THREE.Mesh(mergedGeometry)).build();
+                merged.computeBoundsTree();
+                const targetMesh = new THREE.Mesh(merged);
 
-                const candidateMultiplier = 40;
-                const totalCandidates = this.targetPointCount * candidateMultiplier;
-                const candidates = new Array(totalCandidates);
-                const _p = new THREE.Vector3(), _n = new THREE.Vector3();
-                for (let i = 0; i < totalCandidates; i++) {
-                    sampler.sample(_p, _n);
-                    candidates[i] = { pos: _p.clone(), nrm: _n.clone() };
+                const verts = []; const norms = [];
+                const posAttr = merged.getAttribute('position');
+                const nrmAttr = merged.getAttribute('normal') || (merged.computeVertexNormals(), merged.getAttribute('normal'));
+                const step = Math.max(1, Math.ceil(posAttr.count / 3000));
+                for (let i = 0; i < posAttr.count; i += step) {
+                    verts.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
+                    norms.push(new THREE.Vector3().fromBufferAttribute(nrmAttr, i));
                 }
 
-                const bbox = new THREE.Box3().setFromBufferAttribute(mergedGeometry.getAttribute('position'));
-                const totalArea = this.calculateSurfaceArea(mergedGeometry);
-                const spacing = Math.sqrt(totalArea / this.targetPointCount);
+                const center = verts.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / verts.length);
+                let normal = norms.reduce((a, b) => a.add(b), new THREE.Vector3()).normalize();
+                if (normal.lengthSq() < 1e-6) normal.set(0, 0, 1);
 
-                let cellSize = spacing * 0.9;
-                let pickedPoints = this.filterWithVoxelGrid(candidates, bbox, cellSize);
+                const toCam = camera.position.clone().sub(center).normalize();
+                if (normal.dot(toCam) < 0) normal.multiplyScalar(-1);
 
-                let tries = 0;
-                while (pickedPoints.length < this.targetPointCount * 0.9 && tries < 5) {
-                    cellSize *= 0.9;
-                    pickedPoints = this.filterWithVoxelGrid(candidates, bbox, cellSize);
-                    tries++;
+                let U = new THREE.Vector3(1, 0, 0);
+                if (Math.abs(normal.x) > 0.9) U.set(0, 1, 0);
+                U.sub(normal.clone().multiplyScalar(U.dot(normal))).normalize();
+                const V = new THREE.Vector3().crossVectors(normal, U).normalize();
+
+                let umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity;
+                verts.forEach(p => {
+                    const d = p.clone().sub(center);
+                    const u = d.dot(U); const v = d.dot(V);
+                    if (u < umin) umin = u; if (u > umax) umax = u;
+                    if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+                });
+
+                const pad = this.spacing * 1.5;
+                umin -= pad; umax += pad; vmin -= pad; vmax += pad;
+
+                const du = this.spacing;
+                const dv = this.spacing * Math.sqrt(3) * 0.5;
+
+                const raycaster = new THREE.Raycaster();
+                raycaster.firstHitOnly = true;
+
+                const diag = new THREE.Box3().setFromObject(this.mesh).getSize(new THREE.Vector3()).length() || 1;
+                const pushOut = Math.max(1e-4, diag * 0.1);
+
+                const chosen = [];
+                const maxInstances = this.disks.count;
+                const tmpN = new THREE.Vector3();
+
+                for (let row = 0, v = vmin; v <= vmax; row++, v += dv) {
+                    const uOffset = (row % 2) ? du * 0.5 : 0;
+                    for (let u = umin + uOffset; u <= umax; u += du) {
+                        const origin = center.clone().addScaledVector(U, u).addScaledVector(V, v).addScaledVector(normal, pushOut);
+                        raycaster.set(origin, normal.clone().multiplyScalar(-1));
+                        const hit = raycaster.intersectObject(targetMesh, false)[0];
+                        if (hit) {
+                            tmpN.copy(hit.face.normal).transformDirection(targetMesh.matrixWorld).normalize();
+                            chosen.push({ pos: hit.point.clone(), nrm: tmpN.clone() });
+                            if (chosen.length >= maxInstances) break;
+                        }
+                    }
+                    if (chosen.length >= maxInstances) break;
                 }
 
-                this.finalPoints = pickedPoints;
-                this.updateInstances(camera);
+                targetMesh.geometry.disposeBoundsTree();
+                targetMesh.geometry.dispose();
+                this.finalPoints = chosen;
+                this.updateInstances();
 
-                mergedGeometry.dispose();
-                console.timeEnd('Voxel Grid Sampling');
-
+                console.timeEnd('Hex Grid Generation');
                 document.getElementById('info').innerHTML =
-                    `✅ 均匀点云 | 体素=${cellSize.toFixed(4)} | 点数 <span class="num">${this.finalPoints.length}</span>`;
+                    `✅ 六角网格 | 间距=${this.spacing.toFixed(4)} | 点数 <span class="num">${chosen.length}</span>`;
             }
 
-            calculateSurfaceArea(geometry) {
-                const pos = geometry.getAttribute('position');
-                const idx = geometry.getIndex();
-                const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-                const triangle = new THREE.Triangle(); // 创建一个三角形象例
-                let area = 0;
-                if (idx) {
-                    for (let i = 0; i < idx.count; i += 3) {
-                        a.fromBufferAttribute(pos, idx.getX(i));
-                        b.fromBufferAttribute(pos, idx.getX(i + 1));
-                        c.fromBufferAttribute(pos, idx.getX(i + 2));
-                        // ================== BUG 修复 ==================
-                        area += triangle.set(a, b, c).getArea();
-                        // ===============================================
-                    }
-                } else {
-                    for (let i = 0; i < pos.count; i += 3) {
-                        a.fromBufferAttribute(pos, i);
-                        b.fromBufferAttribute(pos, i + 1);
-                        c.fromBufferAttribute(pos, i + 2);
-                        // ================== BUG 修复 ==================
-                        area += triangle.set(a, b, c).getArea();
-                        // ===============================================
-                    }
-                }
-                return area;
-            }
-
-            filterWithVoxelGrid(candidates, bbox, cellSize) {
-                const grid = new Map();
-                const keyOf = (v) => {
-                    const gx = Math.floor((v.x - bbox.min.x) / cellSize);
-                    const gy = Math.floor((v.y - bbox.min.y) / cellSize);
-                    const gz = Math.floor((v.z - bbox.min.z) / cellSize);
-                    return `${gx},${gy},${gz}`;
-                };
-
-                for (const p of candidates) {
-                    const key = keyOf(p.pos);
-                    if (!grid.has(key)) {
-                        grid.set(key, p);
-                    }
-                }
-                return Array.from(grid.values());
-            }
-
-            updateInstances(camera) {
+            updateInstances() {
                 const count = this.finalPoints.length;
                 const bbox = new THREE.Box3().setFromObject(this.mesh);
-                const diag = bbox.getSize(new THREE.Vector3()).length() || 1;
 
                 this.attrInt.array.fill(0);
                 const colArr = this.attrCol.array;
                 const nrmArr = this.disks.geometry.getAttribute('nrmW').array;
-
-                for (let i = 0; i < count; ++i) {
+                for (let i = 0; i < count; i++) {
                     colArr.set([0.1, 0.85, 0.6], i * 3);
                     this.finalPoints[i].nrm.toArray(nrmArr, i * 3);
                 }
 
                 const M = new THREE.Matrix4();
                 const radii = this.disks.geometry.getAttribute('radius').array;
-                const baseR = diag * 0.0035;
-                this.matDisks.uniforms.pushW.value = diag * 0.004;
+                const baseR = this.spacing * 0.28;
+                this.matDisks.uniforms.pushW.value = this.spacing * 0.3;
 
-                for (let k = 0; k < count; k++) {
-                    M.makeTranslation(this.finalPoints[k].pos.x, this.finalPoints[k].pos.y, this.finalPoints[k].pos.z);
-                    this.disks.setMatrixAt(k, M);
-                    radii[k] = baseR;
+                for (let i = 0; i < count; i++) {
+                    M.makeTranslation(this.finalPoints[i].pos.x, this.finalPoints[i].pos.y, this.finalPoints[i].pos.z);
+                    this.disks.setMatrixAt(i, M);
+                    radii[i] = baseR;
                 }
-                for (let k = count; k < radii.length; k++) { radii[k] = 0; }
+                for (let i = count; i < radii.length; i++) radii[i] = 0;
 
                 this.disks.count = count;
                 this.disks.instanceMatrix.needsUpdate = true;
                 this.disks.geometry.getAttribute('radius').needsUpdate = true;
                 this.disks.geometry.getAttribute('nrmW').needsUpdate = true;
                 this.disks.geometry.getAttribute('color').needsUpdate = true;
-
                 this._center = bbox.getCenter(new THREE.Vector3());
-            }
-
-            _toColor(v) {
-                const [vmin, vmax] = this.range;
-                let t = THREE.MathUtils.clamp((v - vmin) / (vmax - vmin), 0, 1);
-                t = Math.pow(t, 0.75);
-                const c = new THREE.Color();
-                if (t < 0.5) { const k = t / 0.5; c.setRGB(0.09 + 0.41 * k, 0.85 - 0.10 * (1 - k), 0.44 * (1 - k)); }
-                else { const k = (t - 0.5) / 0.5; c.setRGB(0.60 + 0.40 * k, 0.75 * (1 - k), 0.20 * (1 - k)); }
-                return c;
-            }
-
-            updateDemoScalar(dt) {
-                if (this.finalPoints.length === 0) return;
-                this.t += dt;
-                const waveCenter = this._center || new THREE.Vector3();
-                const waveDir = new THREE.Vector3(1, 0.5, 0).normalize();
-                const speed = 0.5;
-                const waveOffset = Math.sin(this.t * speed) * 1.5;
-
-                const vmax = this.range[1];
-                const col = this.attrCol.array;
-                const intens = this.attrInt.array;
-
-                for (let k = 0; k < this.finalPoints.length; k++) {
-                    const p = this.finalPoints[k].pos;
-                    const dist = p.dot(waveDir) - waveOffset;
-                    const gauss = Math.exp(-0.5 * dist * dist * 10);
-                    const val = gauss * vmax;
-                    const c = this._toColor(val);
-                    c.toArray(col, k * 3);
-                    intens[k] = gauss;
-                }
-                this.attrCol.needsUpdate = true;
-                this.attrInt.needsUpdate = true;
             }
         }
 
         let tactile = null;
-        let current = null, mixer = null, aligner = null;
+        let current = null, aligner = null, mixer = null;
         const loader = new GLTFLoader();
         loader.setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/'));
         loader.setMeshoptDecoder(MeshoptDecoder);
 
-        function resize() {
-            const rect = wrap.getBoundingClientRect(); const w = Math.max(1, rect.width); const h = Math.max(1, rect.height);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setSize(w, h, false);
-            camera.aspect = w / h; camera.updateProjectionMatrix(); controls.update();
-        }
-        new ResizeObserver(resize).observe(wrap); resize();
-
-        function resetView() { if (aligner) frameToObject(aligner); }
-
-        function frameToObject(obj, padding = 1.15) {
-            const box = new THREE.Box3().setFromObject(obj); const sphere = box.getBoundingSphere(new THREE.Sphere());
-            const center = sphere.center; const radius = Math.max(1e-6, sphere.radius);
-            const vFov = camera.fov * Math.PI / 180;
-            const hFov = 2 * Math.atan(Math.tan(vFov * 0.5) * camera.aspect);
-            const fov = Math.min(vFov, hFov);
-            const dist = radius / Math.sin(fov * 0.5) * padding;
-
-            const size = box.getSize(new THREE.Vector3()); const maxDim = Math.max(size.x, size.y, size.z);
-            let dir;
-            if (maxDim === size.y) dir = new THREE.Vector3(0.8, 0.4, 0.8);
-            else if (maxDim === size.x) dir = new THREE.Vector3(0.6, 0.6, 1);
-            else dir = new THREE.Vector3(1, 0.6, 1);
-
-            camera.position.copy(center).addScaledVector(dir.normalize(), dist);
-            camera.near = Math.max(dist - radius * 3, 0.001); camera.far = dist + radius * 10;
-            camera.updateProjectionMatrix(); controls.target.copy(center); controls.update();
-        }
-
-        function mapAxes(obj, map) {
-            const pick = (s) => {
-                switch (s) {
-                    case '+x': return new THREE.Vector3(1, 0, 0); case '-x': return new THREE.Vector3(-1, 0, 0);
-                    case '+y': return new THREE.Vector3(0, 1, 0); case '-y': return new THREE.Vector3(0, -1, 0);
-                    case '+z': return new THREE.Vector3(0, 0, 1); case '-z': return new THREE.Vector3(0, 0, -1);
-                    default: return new THREE.Vector3(1, 0, 0);
-                }
-            };
-            const Xw = pick(map.x), Yw = pick(map.y), Zw = pick(map.z);
-            const m = new THREE.Matrix4().makeBasis(Xw, Yw, Zw);
-            obj.setRotationFromQuaternion(new THREE.Quaternion().setFromRotationMatrix(m));
-        }
-
         async function loadURL(url, name = '模型') {
             document.getElementById('info').textContent = `加载中：${name} ...`;
             try {
-                if (tactile) { tactile.dispose(); tactile = null; }
-                if (aligner) { scene.remove(aligner); aligner = null; }
+                if (tactile) tactile.dispose();
+                if (aligner) scene.remove(aligner);
 
                 const gltf = await loader.loadAsync(url);
                 current = gltf.scene;
@@ -476,8 +361,9 @@
 
                 frameToObject(aligner);
 
-                tactile = new TactileLayer(target, { targetPointCount: 2500 });
-                await tactile.resample(camera);
+                const modelSize = new THREE.Box3().setFromObject(aligner).getSize(new THREE.Vector3()).length();
+                tactile = new TactileLayer(target, { spacing: modelSize / 70, maxPoints: 8000 });
+                await tactile.generateHexGrid(camera);
 
                 const tris = renderer.info.render.triangles;
                 document.getElementById('info').innerHTML = `✅ 已加载：<span class="num">${name}</span>`;
@@ -487,9 +373,66 @@
             } catch (e) {
                 console.error(e);
                 document.getElementById('info').textContent = `❌ 加载失败：${e.message || e}`;
-                document.getElementById('stats').textContent = '';
             }
         }
+
+        function resize() {
+            const rect = wrap.getBoundingClientRect();
+            const w = Math.max(1, rect.width);
+            const h = Math.max(1, rect.height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(w, h, false);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            controls.update();
+        }
+
+        function resetView() {
+            if (aligner) frameToObject(aligner);
+        }
+
+        function frameToObject(obj, padding = 1.15) {
+            const box = new THREE.Box3().setFromObject(obj);
+            const sphere = box.getBoundingSphere(new THREE.Sphere());
+            const center = sphere.center;
+            const radius = Math.max(1e-6, sphere.radius);
+            const vFov = camera.fov * Math.PI / 180;
+            const hFov = 2 * Math.atan(Math.tan(vFov * 0.5) * camera.aspect);
+            const fov = Math.min(vFov, hFov);
+            const dist = radius / Math.sin(fov * 0.5) * padding;
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            let dir;
+            if (maxDim === size.y) dir = new THREE.Vector3(0.8, 0.4, 0.8);
+            else if (maxDim === size.x) dir = new THREE.Vector3(0.6, 0.6, 1);
+            else dir = new THREE.Vector3(1, 0.6, 1);
+            camera.position.copy(center).addScaledVector(dir.normalize(), dist);
+            camera.near = Math.max(dist - radius * 3, 0.001);
+            camera.far = dist + radius * 10;
+            camera.updateProjectionMatrix();
+            controls.target.copy(center);
+            controls.update();
+        }
+
+        function mapAxes(obj, map) {
+            const pick = s => {
+                switch (s) {
+                    case '+x': return new THREE.Vector3(1, 0, 0);
+                    case '-x': return new THREE.Vector3(-1, 0, 0);
+                    case '+y': return new THREE.Vector3(0, 1, 0);
+                    case '-y': return new THREE.Vector3(0, -1, 0);
+                    case '+z': return new THREE.Vector3(0, 0, 1);
+                    case '-z': return new THREE.Vector3(0, 0, -1);
+                    default: return new THREE.Vector3(1, 0, 0);
+                }
+            };
+            const Xw = pick(map.x), Yw = pick(map.y), Zw = pick(map.z);
+            const m = new THREE.Matrix4().makeBasis(Xw, Yw, Zw);
+            obj.setRotationFromQuaternion(new THREE.Quaternion().setFromRotationMatrix(m));
+        }
+
+        new ResizeObserver(resize).observe(wrap);
+        resize();
 
         const fileInput = document.getElementById('file');
         fileInput.addEventListener('change', () => {
@@ -497,11 +440,10 @@
         });
         document.getElementById('btnResample').addEventListener('click', async () => {
             if (!current || !tactile) return;
-            await tactile.resample(camera);
+            await tactile.generateHexGrid(camera);
         });
         document.getElementById('btnReset').addEventListener('click', resetView);
         document.getElementById('chkAuto').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
-        document.getElementById('chkArrows').addEventListener('change', e => { if (tactile) tactile.arrows.visible = e.target.checked; });
         document.getElementById('chkBg').addEventListener('change', e => {
             scene.background.set(e.target.checked ? 0x0b0b0b : 0xf8fafc);
             grid.visible = !e.target.checked;
@@ -510,13 +452,11 @@
         const clock = new THREE.Clock();
         (function animate() {
             requestAnimationFrame(animate);
-            const dt = clock.getDelta();
             controls.update();
-            mixer?.update(dt);
+            mixer?.update(clock.getDelta());
             if (tactile?.running) {
                 tactile.matDisks.uniforms.camRight.value.setFromMatrixColumn(camera.matrixWorld, 0);
                 tactile.matDisks.uniforms.camUp.value.setFromMatrixColumn(camera.matrixWorld, 1);
-                tactile.updateDemoScalar(dt);
             }
             renderer.render(scene, camera);
         })();
