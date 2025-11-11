@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>GLB + 虚拟触觉演示 (最终六角网格版)</title>
+    <title>GLB + 虚拟触觉演示 (最终精调版)</title>
     <style>
         html,
         body {
@@ -169,7 +169,7 @@
             constructor(parentMesh, options = {}) {
                 this.mesh = parentMesh;
                 this.spacing = options.spacing ?? 0.05;
-                const maxPoints = options.maxPoints ?? 5000;
+                const maxPoints = options.maxPoints ?? 8000;
 
                 this.attrCol = new THREE.BufferAttribute(new Float32Array(maxPoints * 3), 3);
                 this.attrInt = new THREE.BufferAttribute(new Float32Array(maxPoints), 1);
@@ -191,7 +191,18 @@
                 this.disks.renderOrder = 2;
                 scene.add(this.disks);
 
-                this.t = 0; this.running = true; this.finalPoints = [];
+                this.running = true;
+                this.finalPoints = [];
+
+                this.pressCenter = null;
+                this.pressIntensity = 0.0;
+                this.animationState = 'IDLE';
+                this.stateTimer = 2.0;
+                this.originalColor = new THREE.Color(0x1affc2); // 更鲜亮的青绿色
+                // ================== 新增：中间橙色 ==================
+                this.pressColorMid = new THREE.Color(0xffa500); // 橙色
+                this.pressColorEnd = new THREE.Color(0xff1111); // 红色
+                this.tempColor = new THREE.Color();
             }
 
             dispose() {
@@ -295,13 +306,14 @@
                 const colArr = this.attrCol.array;
                 const nrmArr = this.disks.geometry.getAttribute('nrmW').array;
                 for (let i = 0; i < count; i++) {
-                    colArr.set([0.1, 0.85, 0.6], i * 3);
+                    this.originalColor.toArray(colArr, i * 3);
                     this.finalPoints[i].nrm.toArray(nrmArr, i * 3);
                 }
 
                 const M = new THREE.Matrix4();
                 const radii = this.disks.geometry.getAttribute('radius').array;
-                const baseR = this.spacing * 0.28;
+                // ================== 修改：减小点的半径 ==================
+                const baseR = this.spacing * 0.22;
                 this.matDisks.uniforms.pushW.value = this.spacing * 0.3;
 
                 for (let i = 0; i < count; i++) {
@@ -317,6 +329,89 @@
                 this.disks.geometry.getAttribute('nrmW').needsUpdate = true;
                 this.disks.geometry.getAttribute('color').needsUpdate = true;
                 this._center = bbox.getCenter(new THREE.Vector3());
+            }
+
+            _updatePressAnimation(dt) {
+                this.stateTimer -= dt;
+
+                switch (this.animationState) {
+                    case 'IDLE':
+                        if (this.stateTimer <= 0) {
+                            if (this.finalPoints.length === 0) return;
+                            const randomIndex = Math.floor(Math.random() * this.finalPoints.length);
+                            this.pressCenter = this.finalPoints[randomIndex].pos;
+                            this.animationState = 'PRESSING';
+                            this.stateTimer = 0.5;
+                        }
+                        break;
+
+                    case 'PRESSING':
+                        this.pressIntensity = 1.0 - (this.stateTimer / 0.5);
+                        if (this.stateTimer <= 0) {
+                            this.pressIntensity = 1.0;
+                            this.animationState = 'HOLDING';
+                            this.stateTimer = 1.0;
+                        }
+                        break;
+
+                    case 'HOLDING':
+                        if (this.stateTimer <= 0) {
+                            this.animationState = 'RELEASING';
+                            this.stateTimer = 1.0;
+                        }
+                        break;
+
+                    case 'RELEASING':
+                        this.pressIntensity = this.stateTimer / 1.0;
+                        if (this.stateTimer <= 0) {
+                            this.pressIntensity = 0.0;
+                            this.pressCenter = null;
+                            this.animationState = 'IDLE';
+                            this.stateTimer = Math.random() * 2 + 1;
+                        }
+                        break;
+                }
+            }
+
+            updateVisuals(dt) {
+                this._updatePressAnimation(dt);
+                if (this.finalPoints.length === 0) return;
+
+                const colArr = this.attrCol.array;
+                const intensArr = this.attrInt.array;
+
+                if (!this.pressCenter) {
+                    for (let k = 0; k < this.finalPoints.length; k++) {
+                        this.originalColor.toArray(colArr, k * 3);
+                        intensArr[k] = 0;
+                    }
+                } else {
+                    const modelBbox = new THREE.Box3().setFromObject(this.mesh);
+                    const pressRadius = (modelBbox.getSize(new THREE.Vector3()).length() || 1) / 4;
+                    const pressRadiusSq = pressRadius * pressRadius;
+
+                    for (let k = 0; k < this.finalPoints.length; k++) {
+                        const point = this.finalPoints[k];
+                        const distSq = point.pos.distanceToSquared(this.pressCenter);
+
+                        const falloff = Math.exp(-4 * distSq / pressRadiusSq);
+                        const influence = falloff * this.pressIntensity;
+
+                        // ================== 修改：三段式颜色渐变 ==================
+                        if (influence < 0.5) {
+                            this.tempColor.copy(this.originalColor).lerp(this.pressColorMid, influence * 2);
+                        } else {
+                            this.tempColor.copy(this.pressColorMid).lerp(this.pressColorEnd, (influence - 0.5) * 2);
+                        }
+                        this.tempColor.toArray(colArr, k * 3);
+                        // =======================================================
+
+                        intensArr[k] = influence;
+                    }
+                }
+
+                this.disks.geometry.getAttribute('color').needsUpdate = true;
+                this.disks.geometry.getAttribute('intensity').needsUpdate = true;
             }
         }
 
@@ -362,7 +457,8 @@
                 frameToObject(aligner);
 
                 const modelSize = new THREE.Box3().setFromObject(aligner).getSize(new THREE.Vector3()).length();
-                tactile = new TactileLayer(target, { spacing: modelSize / 70, maxPoints: 8000 });
+                // ================== 修改：提高密度 ==================
+                tactile = new TactileLayer(target, { spacing: modelSize / 100, maxPoints: 8000 });
                 await tactile.generateHexGrid(camera);
 
                 const tris = renderer.info.render.triangles;
@@ -377,52 +473,38 @@
         }
 
         function resize() {
-            const rect = wrap.getBoundingClientRect();
-            const w = Math.max(1, rect.width);
-            const h = Math.max(1, rect.height);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.setSize(w, h, false);
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-            controls.update();
+            const rect = wrap.getBoundingClientRect(); const w = Math.max(1, rect.width); const h = Math.max(1, rect.height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setSize(w, h, false);
+            camera.aspect = w / h; camera.updateProjectionMatrix(); controls.update();
         }
 
-        function resetView() {
-            if (aligner) frameToObject(aligner);
-        }
+        function resetView() { if (aligner) frameToObject(aligner); }
 
         function frameToObject(obj, padding = 1.15) {
-            const box = new THREE.Box3().setFromObject(obj);
-            const sphere = box.getBoundingSphere(new THREE.Sphere());
-            const center = sphere.center;
-            const radius = Math.max(1e-6, sphere.radius);
+            const box = new THREE.Box3().setFromObject(obj); const sphere = box.getBoundingSphere(new THREE.Sphere());
+            const center = sphere.center; const radius = Math.max(1e-6, sphere.radius);
             const vFov = camera.fov * Math.PI / 180;
             const hFov = 2 * Math.atan(Math.tan(vFov * 0.5) * camera.aspect);
             const fov = Math.min(vFov, hFov);
             const dist = radius / Math.sin(fov * 0.5) * padding;
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
+
+            const size = box.getSize(new THREE.Vector3()); const maxDim = Math.max(size.x, size.y, size.z);
             let dir;
             if (maxDim === size.y) dir = new THREE.Vector3(0.8, 0.4, 0.8);
             else if (maxDim === size.x) dir = new THREE.Vector3(0.6, 0.6, 1);
             else dir = new THREE.Vector3(1, 0.6, 1);
+
             camera.position.copy(center).addScaledVector(dir.normalize(), dist);
-            camera.near = Math.max(dist - radius * 3, 0.001);
-            camera.far = dist + radius * 10;
-            camera.updateProjectionMatrix();
-            controls.target.copy(center);
-            controls.update();
+            camera.near = Math.max(dist - radius * 3, 0.001); camera.far = dist + radius * 10;
+            camera.updateProjectionMatrix(); controls.target.copy(center); controls.update();
         }
 
         function mapAxes(obj, map) {
             const pick = s => {
                 switch (s) {
-                    case '+x': return new THREE.Vector3(1, 0, 0);
-                    case '-x': return new THREE.Vector3(-1, 0, 0);
-                    case '+y': return new THREE.Vector3(0, 1, 0);
-                    case '-y': return new THREE.Vector3(0, -1, 0);
-                    case '+z': return new THREE.Vector3(0, 0, 1);
-                    case '-z': return new THREE.Vector3(0, 0, -1);
+                    case '+x': return new THREE.Vector3(1, 0, 0); case '-x': return new THREE.Vector3(-1, 0, 0);
+                    case '+y': return new THREE.Vector3(0, 1, 0); case '-y': return new THREE.Vector3(0, -1, 0);
+                    case '+z': return new THREE.Vector3(0, 0, 1); case '-z': return new THREE.Vector3(0, 0, -1);
                     default: return new THREE.Vector3(1, 0, 0);
                 }
             };
@@ -431,8 +513,7 @@
             obj.setRotationFromQuaternion(new THREE.Quaternion().setFromRotationMatrix(m));
         }
 
-        new ResizeObserver(resize).observe(wrap);
-        resize();
+        new ResizeObserver(resize).observe(wrap); resize();
 
         const fileInput = document.getElementById('file');
         fileInput.addEventListener('change', () => {
@@ -452,11 +533,13 @@
         const clock = new THREE.Clock();
         (function animate() {
             requestAnimationFrame(animate);
+            const dt = clock.getDelta();
             controls.update();
-            mixer?.update(clock.getDelta());
+            mixer?.update(dt);
             if (tactile?.running) {
                 tactile.matDisks.uniforms.camRight.value.setFromMatrixColumn(camera.matrixWorld, 0);
                 tactile.matDisks.uniforms.camUp.value.setFromMatrixColumn(camera.matrixWorld, 1);
+                tactile.updateVisuals(dt);
             }
             renderer.render(scene, camera);
         })();
