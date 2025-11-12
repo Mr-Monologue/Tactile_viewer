@@ -1,0 +1,86 @@
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background: #0b0b0b;
+    color: #e2e8f0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto
+}
+
+#app {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto
+}
+
+header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    background: #0f1218;
+    border-bottom: 1px solid #1e293b
+}
+
+header .brand {
+    font-weight: 700;
+    letter-spacing: .3px;
+    color: #9bdcff
+}
+
+header .spacer {
+    flex: 1
+}
+
+header .btn,
+label.btn {
+    background: #121824;
+    border: 1px solid #1f2a38;
+    color: #d0e7ff;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer
+}
+
+header .btn:hover,
+label.btn:hover {
+    border-color: #2b394f
+}
+
+#viewport {
+    position: relative;
+    overflow: hidden
+}
+
+#viewport canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#hud {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    color: #94a3b8;
+    background: #0f1218;
+    border-top: 1px solid #1e293b;
+    font-size: 13px
+}
+
+.num {
+    color: #99e9ff
+}
+
+input[type=file] {
+    display: none
+}
+
+.switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px
+}
