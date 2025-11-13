@@ -17,16 +17,25 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
+// --- Global State & UI Elements ---
 let current = null,
   aligner = null,
   mixer = null,
   tactile = null;
 const dataProcessor = new DataProcessor();
+const btnConnect = document.getElementById("btnConnect");
+const statusOverlay = document.getElementById("status-overlay");
 
+// ================== BUG修复：在程序启动时就立即显示提示框 ==================
+statusOverlay.style.opacity = 1;
+// =======================================================================
+
+// --- Initialize Scene ---
 const { scene, camera, renderer, controls, grid } = setupScene();
 document.getElementById("viewport").appendChild(renderer.domElement);
 setupResize(camera, renderer, controls);
 
+// --- Loaders ---
 const loader = new GLTFLoader();
 const dracoLoader = new DRACOLoader().setDecoderPath(
   "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/"
@@ -88,6 +97,7 @@ async function loadURL(url, name = "模型") {
     ).innerHTML = `三角面 <span class="num">${tris.toLocaleString()}</span>`;
 
     resetView();
+    // 注意：我们从这里移除了 statusOverlay.style.opacity = 1;
   } catch (e) {
     console.error(e);
     document.getElementById("info").textContent = `❌ 加载失败：${
@@ -100,6 +110,105 @@ function resetView() {
   if (aligner) frameToObject(camera, controls, aligner);
 }
 
+function setupCollapsiblePanels() {
+  const panelTitles = document.querySelectorAll(".collapsible .panel-title");
+  panelTitles.forEach((title) => {
+    title.addEventListener("click", () => {
+      const panel = title.closest(".panel-section");
+      panel.classList.toggle("collapsed");
+    });
+  });
+}
+
+// --- Web Serial API Logic ---
+let port;
+let isConnected = false;
+let keepReading = false;
+let reader;
+
+async function disconnectSerial() {
+  if (reader) {
+    keepReading = false;
+    await reader.cancel().catch(() => {});
+  }
+  if (port) {
+    await port.close();
+    port = null;
+  }
+  isConnected = false;
+  btnConnect.textContent = "连接设备";
+  btnConnect.style.color = "";
+  statusOverlay.style.opacity = 1; // 断开连接时显示
+  if (tactile) tactile.animationState = "IDLE";
+}
+
+async function connectAndReadSerial() {
+  if (isConnected) {
+    await disconnectSerial();
+    return;
+  }
+  try {
+    if (!("serial" in navigator)) {
+      alert("抱歉，您的浏览器不支持 Web Serial API。");
+      return;
+    }
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    isConnected = true;
+    keepReading = true;
+    statusOverlay.style.opacity = 0; // 连接时隐藏
+    if (tactile) tactile.animationState = null;
+    btnConnect.textContent = "校准中...";
+    btnConnect.style.color = "#facc15";
+
+    dataProcessor.startCalibration();
+
+    let buffer = "";
+    reader = port.readable.getReader();
+    const textDecoder = new TextDecoder();
+
+    while (keepReading) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += textDecoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim() || line.split(",").length !== 12) continue;
+        try {
+          const packet = line.split(",").map(parseFloat);
+          if (dataProcessor.isCalibrating) {
+            if (dataProcessor.addCalibrationPacket(packet)) {
+              btnConnect.textContent = "断开连接";
+              btnConnect.style.color = "#f87171";
+            }
+          } else {
+            const result = dataProcessor.process(packet);
+            if (tactile && result) {
+              tactile.updateFromSensorData(
+                result.x,
+                result.y,
+                result.intensity
+              );
+            }
+          }
+        } catch (e) {
+          console.error("解析数据失败:", e);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("串口操作失败:", error);
+    await disconnectSerial();
+  } finally {
+    if (reader) reader.releaseLock();
+  }
+}
+
+// --- UI Event Listeners ---
+btnConnect.addEventListener("click", connectAndReadSerial);
 const fileInput = document.getElementById("file");
 fileInput.addEventListener("change", () => {
   const f = fileInput.files[0];
@@ -119,130 +228,9 @@ document.getElementById("chkBg").addEventListener("change", (e) => {
   grid.visible = !e.target.checked;
 });
 
-// ================== 升级版 Web Serial API 逻辑 ==================
-const btnConnect = document.getElementById("btnConnect");
+setupCollapsiblePanels();
 
-let port;
-
-let isConnected = false;
-
-let keepReading = false;
-
-let reader;
-
-async function disconnectSerial() {
-  if (reader) {
-    keepReading = false;
-
-    await reader.cancel(); // 强制 reader.read() 结束
-
-    // reader.releaseLock(); // reader.cancel() 会自动释放锁
-  }
-
-  if (port) {
-    await port.close();
-
-    port = null;
-  }
-
-  isConnected = false;
-
-  btnConnect.textContent = "连接设备";
-
-  btnConnect.style.color = "";
-
-  console.log("串口已断开");
-
-  if (tactile) {
-    tactile.animationState = "IDLE"; // 恢复随机动画
-  }
-}
-
-async function connectAndReadSerial() {
-  if (isConnected) {
-    await disconnectSerial();
-
-    return;
-  }
-
-  try {
-    if (!("serial" in navigator)) {
-      alert("抱歉，您的浏览器不支持 Web Serial API。");
-      return;
-    }
-
-    port = await navigator.serial.requestPort();
-
-    await port.open({ baudRate: 115200 });
-
-    isConnected = true;
-
-    keepReading = true;
-
-    if (tactile) tactile.animationState = null;
-
-    btnConnect.textContent = "校准中...";
-
-    btnConnect.style.color = "#facc15";
-
-    dataProcessor.startCalibration();
-
-    let buffer = "";
-
-    reader = port.readable.getReader();
-
-    const textDecoder = new TextDecoder();
-
-    while (keepReading) {
-      const { value, done } = await reader.read();
-
-      if (done) break;
-
-      buffer += textDecoder.decode(value, { stream: true });
-
-      const lines = buffer.split("\n");
-
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.trim() || line.split(",").length !== 12) continue;
-
-        try {
-          const packet = line.split(",").map(parseFloat);
-
-          if (dataProcessor.isCalibrating) {
-            if (dataProcessor.addCalibrationPacket(packet)) {
-              btnConnect.textContent = "断开连接";
-
-              btnConnect.style.color = "#f87171"; // 红色，表示可断开
-            }
-          } else {
-            const result = dataProcessor.process(packet);
-
-            if (tactile && result) {
-              tactile.updateFromSensorData(
-                result.x,
-                result.y,
-                result.intensity
-              );
-            }
-          }
-        } catch (e) {
-          console.error("解析数据失败:", e);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("串口操作失败:", error);
-
-    await disconnectSerial(); // 失败时也确保清理
-  } finally {
-    if (reader) reader.releaseLock();
-  }
-}
-
-btnConnect.addEventListener("click", connectAndReadSerial);
-
+// --- Animation Loop ---
 const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
@@ -258,10 +246,14 @@ function animate() {
       camera.matrixWorld,
       1
     );
+    if (!isConnected) {
+      tactile._updatePressAnimation(dt);
+    }
     tactile.updateVisuals(dt);
   }
   renderer.render(scene, camera);
 }
 
+// --- Initial Load ---
 animate();
 loadURL("/finger_1.glb", "默认模型");

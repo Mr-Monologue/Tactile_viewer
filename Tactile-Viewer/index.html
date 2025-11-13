@@ -4,25 +4,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GLB + 虚拟触觉演示 (工程版)</title>
+  <title>GLB + 虚拟触觉演示 (可折叠面板版)</title>
 </head>
 
 <body>
   <div id="app">
-    <header>
-      <div class="brand">GLB + Tactile Demo</div>
-      <!-- ================== BUG修复：添加缺失的连接按钮 ================== -->
-      <button id="btnConnect" class="btn">连接设备</button>
-      <label class="btn">选择GLB
-        <input id="file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" />
-      </label>
-      <button id="btnResample" class="btn">重新采样 (基于当前视角)</button>
-      <button id="btnReset" class="btn">重置视角</button>
-      <div class="spacer"></div>
-      <label class="switch"><input id="chkAuto" type="checkbox" checked />自动旋转</label>
-      <label class="switch"><input id="chkBg" type="checkbox" checked />暗色背景</label>
-    </header>
-    <div id="viewport"></div>
+    <div id="main-content">
+      <div id="viewport">
+        <div id="status-overlay">当前为虚拟数据展示</div>
+        <div class="controls-panel">
+          <!-- ================== 改造为可折叠结构 ================== -->
+          <div class="panel-section collapsible">
+            <div class="panel-title">
+              <span>设备控制</span>
+              <span class="collapse-icon"></span>
+            </div>
+            <div class="panel-content">
+              <div id="device-status" class="status-indicator">
+                <span class="status-icon"></span>
+                <span class="status-text">未初始化</span>
+              </div>
+              <button id="btnConnect" class="btn">连接设备</button>
+            </div>
+          </div>
+          <div class="panel-section collapsible">
+            <div class="panel-title">
+              <span>模型操作</span>
+              <span class="collapse-icon"></span>
+            </div>
+            <div class="panel-content">
+              <label class="btn">选择GLB
+                <input id="file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" />
+              </label>
+              <button id="btnResample" class="btn">重新采样</button>
+              <button id="btnReset" class="btn">重置视角</button>
+            </div>
+          </div>
+          <div class="panel-section collapsible">
+            <div class="panel-title">
+              <span>显示设置</span>
+              <span class="collapse-icon"></span>
+            </div>
+            <div class="panel-content">
+              <label class="switch"><input id="chkAuto" type="checkbox" checked />自动旋转</label>
+              <label class="switch"><input id="chkBg" type="checkbox" checked />暗色背景</label>
+            </div>
+          </div>
+          <!-- ======================================================= -->
+        </div>
+      </div>
+      <div id="data-panel">
+        <div class="panel-title">数据图表</div>
+        <div id="chart-container">
+          <canvas id="pressure-chart"></canvas>
+        </div>
+      </div>
+    </div>
     <div id="hud">
       <span id="info">未加载模型</span>
       <span id="stats"></span>
