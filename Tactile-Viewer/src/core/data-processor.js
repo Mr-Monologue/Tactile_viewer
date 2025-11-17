@@ -9,9 +9,9 @@ const ADC_FULL = 80.0;
 const PRESS_THR = 0.01;
 
 // ================== 新增：方向反转控制开关 ==================
-// 如果您发现X轴左右反了，请将此项改为 true
+// 如果发现X轴左右反了，请将此项改为 true
 const INVERT_X = true;
-// 如果您发现Y轴上下反了，请将此项改为 true
+// 如果发现Y轴上下反了，请将此项改为 true
 const INVERT_Y = false; // 根据Python代码，Y轴很可能需要反转
 // ==========================================================
 
@@ -22,6 +22,8 @@ export class DataProcessor {
     this.zeroCount = 0;
     this.zeroFrames = options.zeroFrames || 10;
     this.isCalibrating = false;
+    this.rawChartDataBuffer = [];
+    this.forceChartDataBuffer = []; // 新增：力值图表数据缓冲区
   }
 
   startCalibration() {
@@ -107,6 +109,16 @@ export class DataProcessor {
       1
     );
 
+    this.rawChartDataBuffer.push(z_amp_raw);
+
+    // ================== 新增：计算标定后的力值 ==================
+    // 这是一个示例性的、简单的线性标定公式。
+    // 您需要根据您的传感器特性，替换成真实的标定公式。
+    // 例如：力(N) = (原始值 * 增益) + 偏移
+    const forceValue = z_amp_raw * 10.0; // 假设满量程(1.0)对应10牛顿
+    this.forceChartDataBuffer.push(forceValue);
+    // ==========================================================
+
     if (z_amp_raw < PRESS_THR) {
       return { x: x_pos, y: y_pos, intensity: 0 }; // 注意：即使强度为0，也把xy传出去
     }
@@ -123,5 +135,15 @@ export class DataProcessor {
       y: y_pos,
       intensity: intensity,
     };
+  }
+
+  // ================== 新增：获取并清空缓冲区的方法 ==================
+  getAndClearChartData() {
+    if (this.rawChartDataBuffer.length === 0) return {};
+    const rawData = [...this.rawChartDataBuffer];
+    const forceData = [...this.forceChartDataBuffer];
+    this.rawChartDataBuffer = [];
+    this.forceChartDataBuffer = [];
+    return { rawData, forceData };
   }
 }

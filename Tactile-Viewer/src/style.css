@@ -1,5 +1,6 @@
-/* ... (大部分样式不变，只展示有改动和新增的部分) ... */
+/* ================== 全局样式 ================== */
 html,
+
 body {
     height: 100%;
     margin: 0;
@@ -9,6 +10,7 @@ body {
     overflow: hidden;
 }
 
+/* ================== 应用的样式 ================== */
 #app {
     position: fixed;
     inset: 0;
@@ -17,9 +19,10 @@ body {
     gap: 2px;
 }
 
+/* ================== 主内容区域的样式 ================== */
 #main-content {
     display: grid;
-    grid-template-columns: 3fr 1fr;
+    grid-template-columns: 5fr 3fr; /* 修改：从 3fr 1fr 改为 2fr 1fr，增大图表区域比例 */
     gap: 10px;
     padding: 10px;
     box-sizing: border-box;
@@ -27,39 +30,21 @@ body {
     height: 100%;
 }
 
+/* ================== 视窗的样式 ================== */
 #viewport {
     position: relative;
     overflow: hidden;
     border-radius: 8px;
 }
 
+/* ================== 视窗canvas的样式 ================== */
 #viewport canvas {
     display: block;
     width: 100% !important;
     height: 100% !important;
 }
 
-#data-panel {
-    background-color: #0f1218;
-    border: 1px solid #1e2b3b;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-#chart-container {
-    flex: 1;
-    position: relative;
-}
-
-#pressure-chart {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-}
-
+/* ================== HUD的样式 ================== */
 #hud {
     display: flex;
     gap: 14px;
@@ -72,14 +57,7 @@ body {
     font-size: 13px;
 }
 
-.num {
-    color: #99e9ff;
-}
-
-input[type=file] {
-    display: none;
-}
-
+/* ================== 按钮的样式 ================== */
 .btn,
 label.btn {
     background: #1e293b;
@@ -95,40 +73,37 @@ label.btn {
     box-sizing: border-box;
 }
 
+/* ================== 按钮的悬浮效果 ================== */
 .btn:hover,
 label.btn:hover {
     background-color: #334155;
 }
 
+input[type=file] {
+    display: none;
+}
+
+/* ================== 开关(Switch)的样式 ================== */
 .switch {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 0;
+    padding: 8px 4px;
     font-size: 14px;
     color: #9ca3af;
+    cursor: pointer;
+    border-radius: 4px;
 }
 
-.controls-panel {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 240px;
-    background-color: rgba(15, 18, 24, 0.85);
-    backdrop-filter: blur(8px);
-    border: 1px solid #1e293b;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    /* 减小section间距 */
+.switch:hover {
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
+/* ================== 虚拟数据提示的样式 ================== */
 #status-overlay {
     position: absolute;
-    top: 50px;
-    left: 50%;
+    bottom: 10%;
+    left: 48%;
     transform: translateX(-50%);
     padding: 10px 20px;
     background-color: rgba(245, 158, 11, 0.2);
@@ -143,7 +118,7 @@ label.btn:hover {
     opacity: 0;
     animation: pulse 2.5s infinite;
 }
-
+/* ================== 虚拟数据提示的动画样式 ================== */
 @keyframes pulse {
     0% {
         box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
@@ -157,71 +132,7 @@ label.btn:hover {
         box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
     }
 }
-
-/* ================== 折叠面板新样式 ================== */
-.panel-section {
-    background-color: rgba(30, 41, 59, 0.5);
-    border-radius: 6px;
-    border: 1px solid #334155;
-    overflow: hidden;
-    /* 关键属性，配合max-height */
-}
-
-.panel-title {
-    font-size: 14px;
-    /* 稍大一点 */
-    font-weight: 600;
-    color: #9ca3af;
-    padding: 10px 12px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none;
-    /* 防止文字被选中 */
-    border: none;
-    /* 移除旧的边框 */
-    margin: 0;
-}
-
-.collapse-icon {
-    width: 8px;
-    height: 8px;
-    border-style: solid;
-    border-color: #9ca3af;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-    transition: transform 0.3s ease-out;
-}
-
-.panel-content {
-    padding: 0 12px 12px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    /* 展开状态 */
-    max-height: 500px;
-    /* 一个足够大的值 */
-    opacity: 1;
-    transition: max-height 0.4s ease-out, opacity 0.3s ease-in, padding 0.3s ease-out;
-}
-
-/* 折叠状态下的样式 */
-.collapsible.collapsed .panel-content {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-.collapsible.collapsed .collapse-icon {
-    transform: rotate(-45deg);
-    /* 箭头向上 */
-}
-
-/* ================================================== */
-
-/* 状态指示器样式(无改动) */
+/* ================== 设备状态指示器的整体样式 ================== */
 .status-indicator {
     display: flex;
     align-items: center;
@@ -234,34 +145,223 @@ label.btn:hover {
     font-weight: 500;
     transition: all 0.3s ease;
 }
-
+/* ================== 设备状态指示器的图标样式 ================== */
 .status-icon {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     transition: background-color 0.3s ease;
 }
-
-.status-indicator.virtual {
-    color: #f59e0b;
-}
-
-.status-indicator.virtual .status-icon {
-    background-color: #f59e0b;
-}
-
-.status-indicator.connected {
-    color: #4ade80;
-}
-
+/* ================== 设备状态指示器的连接图标样式 ================== */
 .status-indicator.connected .status-icon {
     background-color: #4ade80;
 }
-
-.status-indicator.disconnected {
-    color: #64748b;
-}
-
+/* ================== 设备状态指示器的未连接图标样式 ================== */
 .status-indicator.disconnected .status-icon {
     background-color: #64748b;
 }
+
+/* ================== 工具栏和停靠面板新样式 ================== */
+#toolbar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background-color: rgba(15, 18, 24, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 8px;
+    z-index: 10;
+}
+/* ================== 工具栏图标的样式 ================== */
+.toolbar-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #9ca3af;
+    font-size: 18px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+/* ================== 工具栏图标的悬浮效果 ================== */
+.toolbar-icon:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+/* ================== 工具栏图标的激活状态样式 ================== */
+.toolbar-icon.active {
+    background-color: #4f46e5;
+    color: #fff;
+}
+
+/* ================== 工具栏图标的设备图标的特殊颜色状态 ================== */
+
+/* 1. 默认 (未连接) 状态为红色 */
+.toolbar-icon[data-panel="device-panel"] {
+    color: #f87171;
+    /* 红色 */
+}
+
+.toolbar-icon[data-panel="device-panel"]:hover {
+    background-color: #dc2626;
+    /* 悬浮时用深红色背景 */
+    color: #fff;
+}
+
+.toolbar-icon[data-panel="device-panel"].active {
+    background-color: #b91c1c;
+    /* 激活时用更深的红色背景 */
+    color: #fff;
+}
+
+/* 2. 连接后状态为绿色 (通过JS添加 .connected-icon 类) */
+.toolbar-icon.connected-icon {
+    color: #4ade80;
+    /* 绿色 */
+}
+
+.toolbar-icon.connected-icon:hover {
+    background-color: #16a34a;
+    /* 悬浮时用深绿色背景 */
+    color: #fff;
+}
+
+.toolbar-icon.connected-icon.active {
+    background-color: #15803d;
+    /* 激活时用更深的绿色背景 */
+    color: #fff;
+}
+
+/* ================== 停靠面板的样式 ================== */
+.dock-panel {
+    position: absolute;
+    top: 10px;
+    left: 66px;
+    width: 240px;
+    background-color: rgba(15, 18, 24, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+}
+
+/* ================== 停靠面板的可见状态样式 ================== */
+.dock-panel.visible {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* ================== 停靠面板的标题样式 ================== */
+.panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+/* ================== 全新的科技感图表样式 ================== */
+
+/* 数据面板主容器 */
+#data-panel {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 图表小部件 (Widget) */
+.chart-widget {
+    flex: 1;
+    border-radius: 10px;
+    padding: 1px; /* 用于容纳渐变边框 */
+    background: radial-gradient(circle 300px at 5% 5%, #334155, #0c0d0d); /* 径向渐变背景 */
+    position: relative;
+    display: flex; /* 让内部元素可以撑开 */
+    overflow: hidden; /* 隐藏超出边界的动画元素 */
+    min-height: 0; /* Flexbox 关键技巧 */
+}
+
+/* 内部真实容器 (代替 .card) */
+.chart-inner-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 9px;
+    border: solid 1px #202222;
+    background: transparent; /* 背景由父级提供 */
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+}
+
+/* 内部装饰线 (借鉴 .line) */
+.line {
+    width: calc(100% - 40px);
+    height: 1px;
+    position: absolute;
+    left: 20px;
+    background: linear-gradient(90deg, transparent, #555, transparent);
+    z-index: 2;
+}
+
+.line.top { top: 15%; }
+.line.bottom { bottom: 15%; }
+
+/* 面板标题样式 */
+.chart-widget .panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #334155;
+    margin: 0;
+    background-color: rgba(15, 18, 24, 0.5); /* 给标题一个半透明背景 */
+    z-index: 3; /* 确保在装饰线之上 */
+}
+
+/* 图表内容区域 */
+.chart-widget .panel-content {
+    padding: 10px;
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    z-index: 3;
+}
+
+#raw-chart-container, #force-chart-container {
+    flex: 1;
+    position: relative;
+}
+
+#raw-pressure-chart, #force-chart {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+/* ======================================================== */

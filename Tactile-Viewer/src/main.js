@@ -7,6 +7,7 @@ import { setupScene, setupResize } from "./core/scene-setup.js";
 import { TactileLayer } from "./core/tactile-layer.js";
 import { frameToObject, mapAxes } from "./core/utils.js";
 import { DataProcessor } from "./core/data-processor.js";
+import { ChartManager } from "./core/chart-manager.js";
 import {
   acceleratedRaycast,
   computeBoundsTree,
@@ -23,12 +24,27 @@ let current = null,
   mixer = null,
   tactile = null;
 const dataProcessor = new DataProcessor();
+// ================== 修改：在实例化时传入Y轴最大值配置 ==================
+const chartManager = new ChartManager("raw-pressure-chart", "force-chart", {
+  rawMax: 1.0,
+  forceMax: 12.0,
+});
 const btnConnect = document.getElementById("btnConnect");
 const statusOverlay = document.getElementById("status-overlay");
+const toolbarIcons = document.querySelectorAll(".toolbar-icon");
+const dockPanels = document.querySelectorAll(".dock-panel");
+const deviceControlIcon = document.querySelector(
+  '[data-panel="device-panel"] i'
+);
+const deviceControlPanel = document.getElementById("device-panel");
+const deviceControlToolbarIcon = document.querySelector(
+  '[data-panel="device-panel"]'
+);
+const deviceStatusIndicator = document.getElementById("device-status");
+const deviceStatusText = deviceStatusIndicator.querySelector(".status-text");
+const toast = document.getElementById("toast-notification");
 
-// ================== BUG修复：在程序启动时就立即显示提示框 ==================
 statusOverlay.style.opacity = 1;
-// =======================================================================
 
 // --- Initialize Scene ---
 const { scene, camera, renderer, controls, grid } = setupScene();
@@ -97,7 +113,6 @@ async function loadURL(url, name = "模型") {
     ).innerHTML = `三角面 <span class="num">${tris.toLocaleString()}</span>`;
 
     resetView();
-    // 注意：我们从这里移除了 statusOverlay.style.opacity = 1;
   } catch (e) {
     console.error(e);
     document.getElementById("info").textContent = `❌ 加载失败：${
@@ -106,25 +121,103 @@ async function loadURL(url, name = "模型") {
   }
 }
 
+let toastTimer;
+// ================== 新增：消息通知函数 ==================
+function showToast(message) {
+  if (toastTimer) clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.add("show");
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 4000); // 4秒后自动消失
+}
+
+// ================== 新增：统一的状态管理函数 ==================
+function updateConnectionStatus(status) {
+  switch (status) {
+    case "virtual":
+      statusOverlay.style.opacity = 1;
+      deviceStatusIndicator.classList.remove("connected");
+      deviceStatusText.textContent = "虚拟数据";
+      btnConnect.textContent = "连接设备";
+      btnConnect.style.color = "";
+      deviceControlIcon.classList.remove("fa-link");
+      deviceControlIcon.classList.add("fa-unlink");
+      deviceControlToolbarIcon.classList.remove("connected-icon");
+      if (tactile) tactile.animationState = "IDLE";
+      break;
+    case "calibrating":
+      statusOverlay.style.opacity = 0;
+      deviceStatusIndicator.classList.remove("connected");
+      deviceStatusText.textContent = "校准中...";
+      btnConnect.textContent = "校准中...";
+      btnConnect.style.color = "#facc15";
+      break;
+    case "connected":
+      deviceStatusIndicator.classList.add("connected");
+      deviceStatusText.textContent = "已连接";
+      btnConnect.textContent = "断开连接";
+      btnConnect.style.color = "#f87171";
+      deviceControlIcon.classList.remove("fa-unlink");
+      deviceControlIcon.classList.add("fa-link");
+      deviceControlToolbarIcon.classList.add("connected-icon");
+      if (tactile) tactile.animationState = null;
+      // 自动收起面板
+      deviceControlPanel.classList.remove("visible");
+      deviceControlToolbarIcon.classList.remove("active");
+      break;
+    case "disconnected":
+      statusOverlay.style.opacity = 1;
+      deviceStatusIndicator.classList.remove("connected");
+      deviceStatusText.textContent = "未连接";
+      btnConnect.textContent = "连接设备";
+      btnConnect.style.color = "";
+      deviceControlIcon.classList.remove("fa-link");
+      deviceControlIcon.classList.add("fa-unlink");
+      deviceControlToolbarIcon.classList.remove("connected-icon");
+      if (tactile) tactile.animationState = "IDLE";
+      // 强制展开
+      deviceControlPanel.classList.add("visible");
+      deviceControlToolbarIcon.classList.add("active");
+      break;
+  }
+}
+// ===============================================================
+
 function resetView() {
   if (aligner) frameToObject(camera, controls, aligner);
 }
 
-function setupCollapsiblePanels() {
-  const panelTitles = document.querySelectorAll(".collapsible .panel-title");
-  panelTitles.forEach((title) => {
-    title.addEventListener("click", () => {
-      const panel = title.closest(".panel-section");
-      panel.classList.toggle("collapsed");
+function setupToolbar() {
+  toolbarIcons.forEach((icon) => {
+    icon.addEventListener("click", () => {
+      const panelId = icon.dataset.panel;
+      const targetPanel = document.getElementById(panelId);
+
+      // 统一的面板切换逻辑
+      const wasActive = icon.classList.contains("active");
+
+      // 总是先关闭所有
+      toolbarIcons.forEach((i) => i.classList.remove("active"));
+      dockPanels.forEach((p) => p.classList.remove("visible"));
+
+      // 如果点击的不是已激活的，则打开它
+      if (!wasActive) {
+        icon.classList.add("active");
+        targetPanel.classList.add("visible");
+      }
     });
   });
-}
 
-// --- Web Serial API Logic ---
-let port;
-let isConnected = false;
-let keepReading = false;
-let reader;
+  // 默认打开设备控制面板，并激活其图标
+  deviceControlPanel.classList.add("visible");
+  deviceControlToolbarIcon.classList.add("active");
+}
+// ================== 升级版 Web Serial API 逻辑 ==================
+let port,
+  isConnected = false,
+  keepReading = false,
+  reader;
 
 async function disconnectSerial() {
   if (reader) {
@@ -136,10 +229,8 @@ async function disconnectSerial() {
     port = null;
   }
   isConnected = false;
-  btnConnect.textContent = "连接设备";
-  btnConnect.style.color = "";
-  statusOverlay.style.opacity = 1; // 断开连接时显示
-  if (tactile) tactile.animationState = "IDLE";
+  console.log("串口已断开");
+  updateConnectionStatus("disconnected");
 }
 
 async function connectAndReadSerial() {
@@ -156,33 +247,25 @@ async function connectAndReadSerial() {
     await port.open({ baudRate: 115200 });
     isConnected = true;
     keepReading = true;
-    statusOverlay.style.opacity = 0; // 连接时隐藏
-    if (tactile) tactile.animationState = null;
-    btnConnect.textContent = "校准中...";
-    btnConnect.style.color = "#facc15";
+    updateConnectionStatus("calibrating");
 
     dataProcessor.startCalibration();
-
     let buffer = "";
     reader = port.readable.getReader();
     const textDecoder = new TextDecoder();
-
     while (keepReading) {
       const { value, done } = await reader.read();
       if (done) break;
-
       buffer += textDecoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop();
-
       for (const line of lines) {
         if (!line.trim() || line.split(",").length !== 12) continue;
         try {
           const packet = line.split(",").map(parseFloat);
           if (dataProcessor.isCalibrating) {
             if (dataProcessor.addCalibrationPacket(packet)) {
-              btnConnect.textContent = "断开连接";
-              btnConnect.style.color = "#f87171";
+              updateConnectionStatus("connected");
             }
           } else {
             const result = dataProcessor.process(packet);
@@ -202,11 +285,17 @@ async function connectAndReadSerial() {
   } catch (error) {
     console.error("串口操作失败:", error);
     await disconnectSerial();
+    if (error.name === "NotFoundError") {
+      showToast("您没有选择任何串口设备。");
+    } else if (error.name === "InvalidStateError") {
+      showToast("连接失败：端口已被占用或设备已断开。");
+    } else {
+      showToast("发生未知错误，请重试。");
+    }
   } finally {
     if (reader) reader.releaseLock();
   }
 }
-
 // --- UI Event Listeners ---
 btnConnect.addEventListener("click", connectAndReadSerial);
 const fileInput = document.getElementById("file");
@@ -228,15 +317,19 @@ document.getElementById("chkBg").addEventListener("change", (e) => {
   grid.visible = !e.target.checked;
 });
 
-setupCollapsiblePanels();
-
 // --- Animation Loop ---
 const clock = new THREE.Clock();
+// ================== 新增：图表更新节流控制 ==================
+let timeSinceLastChartUpdate = 0;
+const CHART_UPDATE_INTERVAL = 0.1; // 每0.1秒更新一次图表 (10 FPS)
+// =========================================================
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   controls.update();
   mixer?.update(dt);
+
   if (tactile?.running) {
     tactile.matDisks.uniforms.camRight.value.setFromMatrixColumn(
       camera.matrixWorld,
@@ -251,9 +344,22 @@ function animate() {
     }
     tactile.updateVisuals(dt);
   }
+
+  // ================== 新增：图表更新逻辑 ==================
+  timeSinceLastChartUpdate += dt;
+  if (timeSinceLastChartUpdate > CHART_UPDATE_INTERVAL) {
+    const newData = dataProcessor.getAndClearChartData();
+    if (newData) {
+      chartManager.update(newData);
+    }
+    timeSinceLastChartUpdate = 0;
+  }
+  // ====================================================
+
   renderer.render(scene, camera);
 }
 
 // --- Initial Load ---
+setupToolbar();
 animate();
 loadURL("/finger_1.glb", "默认模型");
