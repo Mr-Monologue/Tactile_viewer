@@ -8,6 +8,16 @@ const CHIP_MAP = [0, 1, 2, 3]; // JS数组索引从0开始
 const ADC_FULL = 80.0;
 const PRESS_THR = 0.01;
 
+// 在文件顶部定义传感器位置布局
+const SENSOR_POSITIONS = [
+  { x: 1, y: 1 }, // Chip 0: 左上
+  { x: -1, y: 1 }, // Chip 1: 右上
+  { x: 1, y: -1 }, // Chip 2: 左下
+  { x: -1, y: -1 }, // Chip 3: 右下
+  // 注意：请根据您的实际硬件布局调整这个顺序！
+  // 如果您的CHIP_MAP映射不同，这里的顺序也要对应调整。
+];
+
 // ================== 新增：方向反转控制开关 ==================
 // 如果发现X轴左右反了，请将此项改为 true
 const INVERT_X = true;
@@ -90,45 +100,68 @@ export class DataProcessor {
     }
 
     const currentVectors = this._packetToVectors(packet);
-    const delta = currentVectors.map((v, i) =>
-      v.clone().sub(this.zeroBaseline[i])
-    );
-    const vecTotal = delta
-      .reduce((sum, v) => sum.add(v), new THREE.Vector3())
-      .multiplyScalar(1 / 4);
 
-    let x_pos = THREE.MathUtils.clamp(vecTotal.x / ADC_FULL, -1, 1);
-    let y_pos = THREE.MathUtils.clamp(vecTotal.y / ADC_FULL, -1, 1);
+    // 1. 计算每个传感器的独立 Z 轴压力值 (权重)
+    const weights = [];
+    let totalWeight = 0;
+    let maxWeight = 0;
 
-    if (INVERT_X) x_pos = -x_pos;
-    if (INVERT_Y) y_pos = -y_pos;
+    for (let i = 0; i < 4; i++) {
+      // 计算该传感器的变化向量
+      const delta = currentVectors[i].clone().sub(this.zeroBaseline[i]);
 
-    const z_amp_raw = THREE.MathUtils.clamp(
-      Math.abs(vecTotal.z) / ADC_FULL,
-      0,
-      1
-    );
-    const rawZDelta = Math.abs(vecTotal.z);
-    this.rawChartDataBuffer.push(z_amp_raw);
-    // ================== 新增：计算标定后的力值 ==================
-    // 根据传感器特性，计算标定因子
-    // 请根据您的传感器特性，替换成真实的标定公式。
-    // 例如：力(N) = (原始值 * 增益) + 偏移
-    const CALIBRATION_FACTOR = 0.263; //标定因子，请根据您的传感器特性，替换成真实的标定公式。
-    const forceValue = rawZDelta * CALIBRATION_FACTOR; // 力值 = 原始值 * 标定因子
-    this.forceChartDataBuffer.push(forceValue);
-    // ==========================================================
+      // 取Z轴绝对值作为该传感器的压力权重
+      // 这里可以加一个微小的死区或噪声过滤
+      let w = Math.abs(delta.z);
+      if (w < 2.0) w = 0; // 过滤掉底噪
 
-    if (z_amp_raw < PRESS_THR) {
-      return { x: x_pos, y: y_pos, intensity: 0 }; // 注意：即使强度为0，也把xy传出去
+      weights.push(w);
+      totalWeight += w;
+      if (w > maxWeight) maxWeight = w;
     }
 
-    const intensity_raw = (z_amp_raw - PRESS_THR) / (1 - PRESS_THR);
+    // 将原始总压力推入图表缓冲区
+    const rawZTotal = totalWeight / 4; // 取平均值作为总压力指标
+    const z_amp_visual = THREE.MathUtils.clamp(rawZTotal / ADC_FULL, 0, 1);
+    this.rawChartDataBuffer.push(z_amp_visual);
 
-    // ================== 修改：增加强度增益 ==================
-    const z_gain = 2.5; // <--- 您可以随时调整这个“力度放大”系数
-    const intensity = Math.min(intensity_raw * z_gain, 1.0); // 放大后要截断
-    // =======================================================
+    const CALIBRATION_FACTOR = 0.263;
+    const forceValue = rawZTotal * CALIBRATION_FACTOR;
+    this.forceChartDataBuffer.push(forceValue);
+
+    // 如果总压力太小，视为无操作
+    if (z_amp_visual < PRESS_THR) {
+      return { x: 0, y: 0, intensity: 0 };
+    }
+
+    // ================== 核心升级：重心法计算坐标 ==================
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let i = 0; i < 4; i++) {
+      const w = weights[i];
+      // 简单的线性加权
+      weightedX += SENSOR_POSITIONS[i].x * w;
+      weightedY += SENSOR_POSITIONS[i].y * w;
+    }
+
+    // 归一化坐标
+    let x_pos = weightedX / totalWeight;
+    let y_pos = weightedY / totalWeight;
+
+    // 翻转修正 (保留之前的逻辑)
+    if (INVERT_X) x_pos = -x_pos;
+    if (INVERT_Y) y_pos = -y_pos; // 注意：如果传感器位置定义得当，可能不需要这个翻转了
+
+    // 限制范围
+    x_pos = THREE.MathUtils.clamp(x_pos, -1, 1);
+    y_pos = THREE.MathUtils.clamp(y_pos, -1, 1);
+    // ==========================================================
+
+    // 强度计算保持不变，或者使用 maxWeight 来表示峰值强度
+    const intensity_raw = (z_amp_visual - PRESS_THR) / (1 - PRESS_THR);
+    const z_gain = 2.5;
+    const intensity = Math.min(intensity_raw * z_gain, 1.0);
 
     return {
       x: x_pos,
