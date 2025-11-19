@@ -3,8 +3,14 @@ Chart.register(...registerables);
 
 const MAX_DATA_POINTS = 100;
 
-// ================== 修改：接收 min/max 配置 ==================
-function createChartConfig(label, borderColor, backgroundColor, yMin, yMax) {
+// ================== 升级：创建带渐变填充的图表配置 ==================
+function createChartConfig(ctx, label, color, yMin, yMax) {
+  // 创建线性渐变
+  const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+  gradient.addColorStop(0, `${color}60`); // 顶部颜色 (38% 透明度)
+  gradient.addColorStop(0.8, `${color}10`); // 中下部颜色 (6% 透明度)
+  gradient.addColorStop(1, `${color}00`); // 底部完全透明
+
   return {
     type: "line",
     data: {
@@ -13,8 +19,8 @@ function createChartConfig(label, borderColor, backgroundColor, yMin, yMax) {
         {
           label: label,
           data: new Array(MAX_DATA_POINTS).fill(0),
-          borderColor: borderColor,
-          backgroundColor: backgroundColor,
+          borderColor: color, // 使用新的活力颜色
+          backgroundColor: gradient, // 应用渐变
           borderWidth: 2,
           fill: true,
           tension: 0.4,
@@ -28,12 +34,12 @@ function createChartConfig(label, borderColor, backgroundColor, yMin, yMax) {
       scales: {
         x: { display: false },
         y: {
-          // ================== 应用固定的Y轴范围 ==================
           min: yMin,
           max: yMax,
-          // =======================================================
           ticks: { color: "#9ca3af", font: { size: 10 } },
-          grid: { color: "rgba(255, 255, 255, 0.1)" },
+          grid: {
+            color: "rgba(255, 255, 255, 0.05)", // 网格线调得更暗
+          },
         },
       },
       plugins: {
@@ -49,29 +55,31 @@ export class ChartManager {
     const rawCtx = document.getElementById(rawCanvasId).getContext("2d");
     const forceCtx = document.getElementById(forceCanvasId).getContext("2d");
 
-    // ================== 修改：传入Y轴范围 ==================
+    // ================== 升级：使用新的活力颜色 ==================
+    const vibrantGreen = "#00ff9d"; // 活力薄荷绿
+    const vibrantAmber = "#ffc300"; // 活力琥珀色
+
     this.rawChart = new Chart(
       rawCtx,
       createChartConfig(
+        rawCtx,
         "原始值",
-        "#4ade80",
-        "rgba(74, 222, 128, 0.2)",
-        0, // min
-        options.rawMax || 1.0 // max
+        vibrantGreen,
+        0,
+        options.rawMax || 1.0
       )
     );
 
     this.forceChart = new Chart(
       forceCtx,
       createChartConfig(
+        forceCtx,
         "力值 (N)",
-        "#f59e0b",
-        "rgba(245, 158, 11, 0.2)",
-        0, // min
-        options.forceMax || 12.0 // max
+        vibrantAmber,
+        0,
+        options.forceMax || 12.0
       )
     );
-    // ====================================================
   }
 
   _updateChart(chart, newDataArray) {
@@ -81,7 +89,7 @@ export class ChartManager {
     if (data.length > MAX_DATA_POINTS) {
       data.splice(0, data.length - MAX_DATA_POINTS);
     }
-    chart.update();
+    chart.update("none"); // 'none' 参数可以获得更快的实时更新
   }
 
   updateRawChart(newDataArray) {
@@ -90,12 +98,5 @@ export class ChartManager {
 
   updateForceChart(newDataArray) {
     this._updateChart(this.forceChart, newDataArray);
-  }
-
-  // 统一更新方法，接收包含 rawData 和 forceData 的对象
-  update(data) {
-    if (!data || typeof data !== "object") return;
-    if (data.rawData) this.updateRawChart(data.rawData);
-    if (data.forceData) this.updateForceChart(data.forceData);
   }
 }

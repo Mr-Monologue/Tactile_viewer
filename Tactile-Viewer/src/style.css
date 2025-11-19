@@ -1,7 +1,5 @@
 /* ================== 全局样式 ================== */
-html,
-
-body {
+html, body {
     height: 100%;
     margin: 0;
     background: #0b0b0b;
@@ -21,9 +19,6 @@ body {
 
 /* ================== 主内容区域的样式 ================== */
 #main-content {
-    display: grid;
-    grid-template-columns: 5fr 3fr; /* 修改：从 3fr 1fr 改为 2fr 1fr，增大图表区域比例 */
-    gap: 10px;
     padding: 10px;
     box-sizing: border-box;
     overflow: hidden;
@@ -33,6 +28,8 @@ body {
 /* ================== 视窗的样式 ================== */
 #viewport {
     position: relative;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     border-radius: 8px;
 }
@@ -102,9 +99,7 @@ input[type=file] {
 /* ================== 虚拟数据提示的样式 ================== */
 #status-overlay {
     position: absolute;
-    bottom: 10%;
-    left: 48%;
-    transform: translateX(-50%);
+    /* bottom 和 left 将由 JS 动态计算，确保完美居中 */
     padding: 10px 20px;
     background-color: rgba(245, 158, 11, 0.2);
     border: 1px solid #f59e0b;
@@ -113,10 +108,14 @@ input[type=file] {
     font-size: 16px;
     font-weight: 600;
     pointer-events: none;
-    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+    transition: opacity 0.5s ease-in-out;
     white-space: nowrap;
     opacity: 0;
     animation: pulse 2.5s infinite;
+    transform: translateX(-50%);
+    /* 仅保留自身居中 */
+    z-index: 8;
+    /* 确保在模型之上 */
 }
 /* ================== 虚拟数据提示的动画样式 ================== */
 @keyframes pulse {
@@ -280,88 +279,90 @@ input[type=file] {
     margin-bottom: 4px;
 }
 
-/* ================== 全新的科技感图表样式 ================== */
-
-/* 数据面板主容器 */
+/* ================== 图表样式 ================== */
 #data-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 25%;
+    min-width: 500px;
+    height: calc(100% - 20px);
     background-color: transparent;
     border: none;
     padding: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    z-index: 5;
+    pointer-events: none;
 }
 
-/* 图表小部件 (Widget) */
+#data-panel > * {
+    pointer-events: auto;
+}
+
 .chart-widget {
     flex: 1;
-    border-radius: 10px;
-    padding: 1px; /* 用于容纳渐变边框 */
-    background: radial-gradient(circle 300px at 5% 5%, #334155, #0c0d0d); /* 径向渐变背景 */
-    position: relative;
-    display: flex; /* 让内部元素可以撑开 */
-    overflow: hidden; /* 隐藏超出边界的动画元素 */
-    min-height: 0; /* Flexbox 关键技巧 */
-}
-
-/* 内部真实容器 (代替 .card) */
-.chart-inner-card {
-    width: 100%;
-    height: 100%;
-    border-radius: 9px;
-    border: solid 1px #202222;
-    background: transparent; /* 背景由父级提供 */
+    /* 核心：应用毛玻璃效果 */
+    background-color: rgba(15, 18, 24, 0.3); /* 半透明背景 */
+    backdrop-filter: blur(8px);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
     position: relative;
-    z-index: 1;
 }
 
-/* 内部装饰线 (借鉴 .line) */
-.line {
-    width: calc(100% - 40px);
-    height: 1px;
-    position: absolute;
-    left: 20px;
-    background: linear-gradient(90deg, transparent, #555, transparent);
-    z-index: 2;
-}
-
-.line.top { top: 15%; }
-.line.bottom { bottom: 15%; }
-
-/* 面板标题样式 */
 .chart-widget .panel-title {
-    font-size: 12px;
+font-size: 18px;
     font-weight: 600;
-    color: #9ca3af;
+    color: #a0aec0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 3.0px;
     padding: 10px 12px;
-    border-bottom: 1px solid #334155;
+    border-bottom: none;
     margin: 0;
-    background-color: rgba(15, 18, 24, 0.5); /* 给标题一个半透明背景 */
-    z-index: 3; /* 确保在装饰线之上 */
+    background-color: transparent;
+    backdrop-filter: none;
+    justify-content: center;
+    z-index: 3;
+    display: flex;
+    align-items: center;
 }
 
-/* 图表内容区域 */
 .chart-widget .panel-content {
     padding: 10px;
     flex: 1;
     display: flex;
     min-height: 0;
-    z-index: 3;
 }
 
-#raw-chart-container, #force-chart-container {
+#raw-chart-container,
+#force-chart-container {
     flex: 1;
     position: relative;
+    /* 移除背景网格，让毛玻璃效果成为主角 */
 }
 
-#raw-pressure-chart, #force-chart {
+#raw-pressure-chart,
+#force-chart {
     position: absolute;
     width: 100%;
     height: 100%;
+    /* 增强辉光效果 */
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
 }
 
+.panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
 /* ======================================================== */

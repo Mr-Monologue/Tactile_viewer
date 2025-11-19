@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import { setupScene, setupResize } from "./core/scene-setup.js";
+import { setupScene, setupResize } from "./core/scene-setup.js"; // 引入通用的setupResize，但我们在下面会覆盖它
 import { TactileLayer } from "./core/tactile-layer.js";
 import { frameToObject, mapAxes } from "./core/utils.js";
 import { DataProcessor } from "./core/data-processor.js";
@@ -18,17 +18,18 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-// --- Global State & UI Elements ---
+// --- Global State ---
 let current = null,
   aligner = null,
   mixer = null,
   tactile = null;
 const dataProcessor = new DataProcessor();
-// ================== 修改：在实例化时传入Y轴最大值配置 ==================
 const chartManager = new ChartManager("raw-pressure-chart", "force-chart", {
-  rawMax: 1.0,
+  rawMax: 0.6,
   forceMax: 12.0,
 });
+
+// --- UI Elements ---
 const btnConnect = document.getElementById("btnConnect");
 const statusOverlay = document.getElementById("status-overlay");
 const toolbarIcons = document.querySelectorAll(".toolbar-icon");
@@ -49,7 +50,53 @@ statusOverlay.style.opacity = 1;
 // --- Initialize Scene ---
 const { scene, camera, renderer, controls, grid } = setupScene();
 document.getElementById("viewport").appendChild(renderer.domElement);
-setupResize(camera, renderer, controls);
+
+// ================== 核心修复：回归最纯粹的标准 Resize 逻辑 ==================
+function setupStandardResize() {
+  const viewport = document.getElementById("viewport");
+  const dataPanel = document.getElementById("data-panel");
+  const statusOverlay = document.getElementById("status-overlay");
+
+  const resize = () => {
+    const rect = viewport.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+
+    // 1. 渲染器全屏
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+
+    // 2. 获取右侧面板的实际宽度
+    let panelWidth = 0;
+    if (dataPanel) {
+      panelWidth = dataPanel.offsetWidth + 20; // 加上右边距
+    }
+
+    // 3. 计算相机偏移 (让模型居中于剩余空间)
+    // 偏移量 = 面板宽度 / 2
+    const xOffset = panelWidth / 2;
+    camera.setViewOffset(width, height, xOffset, 0, width, height);
+
+    camera.updateProjectionMatrix();
+    controls.update();
+
+    // 4. 【新功能】同步设置提示框的位置
+    // 视觉中心X = (总宽度 - 面板宽度) / 2
+    const visualCenterX = (width - panelWidth) / 2;
+
+    // 设置提示框位置
+    if (statusOverlay) {
+      statusOverlay.style.left = `${visualCenterX}px`;
+      // 固定在底部 15% 的位置，避开模型
+      statusOverlay.style.bottom = `${height * 0.15}px`;
+    }
+  };
+
+  new ResizeObserver(resize).observe(viewport);
+  resize();
+}
+setupStandardResize();
+// =======================================================================
 
 // --- Loaders ---
 const loader = new GLTFLoader();
@@ -59,6 +106,7 @@ const dracoLoader = new DRACOLoader().setDecoderPath(
 loader.setDRACOLoader(dracoLoader);
 loader.setMeshoptDecoder(MeshoptDecoder);
 
+// --- Core Logic ---
 async function loadURL(url, name = "模型") {
   document.getElementById("info").textContent = `加载中：${name} ...`;
   try {
@@ -92,6 +140,7 @@ async function loadURL(url, name = "模型") {
     }
     const target = touchArea || current;
 
+    // 此时相机宽高比已正确，frameToObject 将完美居中
     frameToObject(camera, controls, aligner);
 
     const modelSize = new THREE.Box3()
@@ -121,18 +170,20 @@ async function loadURL(url, name = "模型") {
   }
 }
 
-let toastTimer;
-// ================== 新增：消息通知函数 ==================
 function showToast(message) {
+  if (!toast) {
+    console.warn("Toast:", message);
+    return;
+  }
   if (toastTimer) clearTimeout(toastTimer);
   toast.textContent = message;
   toast.classList.add("show");
   toastTimer = setTimeout(() => {
     toast.classList.remove("show");
-  }, 4000); // 4秒后自动消失
+  }, 4000);
 }
+let toastTimer;
 
-// ================== 新增：统一的状态管理函数 ==================
 function updateConnectionStatus(status) {
   switch (status) {
     case "virtual":
@@ -162,7 +213,6 @@ function updateConnectionStatus(status) {
       deviceControlIcon.classList.add("fa-link");
       deviceControlToolbarIcon.classList.add("connected-icon");
       if (tactile) tactile.animationState = null;
-      // 自动收起面板
       deviceControlPanel.classList.remove("visible");
       deviceControlToolbarIcon.classList.remove("active");
       break;
@@ -176,13 +226,11 @@ function updateConnectionStatus(status) {
       deviceControlIcon.classList.add("fa-unlink");
       deviceControlToolbarIcon.classList.remove("connected-icon");
       if (tactile) tactile.animationState = "IDLE";
-      // 强制展开
       deviceControlPanel.classList.add("visible");
       deviceControlToolbarIcon.classList.add("active");
       break;
   }
 }
-// ===============================================================
 
 function resetView() {
   if (aligner) frameToObject(camera, controls, aligner);
@@ -193,33 +241,27 @@ function setupToolbar() {
     icon.addEventListener("click", () => {
       const panelId = icon.dataset.panel;
       const targetPanel = document.getElementById(panelId);
-
-      // 统一的面板切换逻辑
       const wasActive = icon.classList.contains("active");
-
-      // 总是先关闭所有
       toolbarIcons.forEach((i) => i.classList.remove("active"));
       dockPanels.forEach((p) => p.classList.remove("visible"));
-
-      // 如果点击的不是已激活的，则打开它
       if (!wasActive) {
         icon.classList.add("active");
         targetPanel.classList.add("visible");
       }
     });
   });
-
-  // 默认打开设备控制面板，并激活其图标
   deviceControlPanel.classList.add("visible");
   deviceControlToolbarIcon.classList.add("active");
 }
-// ================== 升级版 Web Serial API 逻辑 ==================
+
 let port,
   isConnected = false,
   keepReading = false,
   reader;
 
 async function disconnectSerial() {
+  btnConnect.disabled = true;
+  btnConnect.textContent = "断开中...";
   if (reader) {
     keepReading = false;
     await reader.cancel().catch(() => {});
@@ -231,6 +273,7 @@ async function disconnectSerial() {
   isConnected = false;
   console.log("串口已断开");
   updateConnectionStatus("disconnected");
+  btnConnect.disabled = false;
 }
 
 async function connectAndReadSerial() {
@@ -243,8 +286,10 @@ async function connectAndReadSerial() {
       alert("抱歉，您的浏览器不支持 Web Serial API。");
       return;
     }
+    btnConnect.disabled = true;
     port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
+    btnConnect.disabled = false;
     isConnected = true;
     keepReading = true;
     updateConnectionStatus("calibrating");
@@ -283,19 +328,18 @@ async function connectAndReadSerial() {
       }
     }
   } catch (error) {
+    btnConnect.disabled = false;
     console.error("串口操作失败:", error);
-    await disconnectSerial();
-    if (error.name === "NotFoundError") {
-      showToast("您没有选择任何串口设备。");
-    } else if (error.name === "InvalidStateError") {
+    if (error.name === "NotFoundError") showToast("您没有选择任何串口设备。");
+    else if (error.name === "InvalidStateError")
       showToast("连接失败：端口已被占用或设备已断开。");
-    } else {
-      showToast("发生未知错误，请重试。");
-    }
+    else showToast("发生未知错误，请重试。");
+    await disconnectSerial();
   } finally {
     if (reader) reader.releaseLock();
   }
 }
+
 // --- UI Event Listeners ---
 btnConnect.addEventListener("click", connectAndReadSerial);
 const fileInput = document.getElementById("file");
@@ -319,17 +363,14 @@ document.getElementById("chkBg").addEventListener("change", (e) => {
 
 // --- Animation Loop ---
 const clock = new THREE.Clock();
-// ================== 新增：图表更新节流控制 ==================
 let timeSinceLastChartUpdate = 0;
-const CHART_UPDATE_INTERVAL = 0.1; // 每0.1秒更新一次图表 (10 FPS)
-// =========================================================
+const CHART_UPDATE_INTERVAL = 0.1;
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   controls.update();
   mixer?.update(dt);
-
   if (tactile?.running) {
     tactile.matDisks.uniforms.camRight.value.setFromMatrixColumn(
       camera.matrixWorld,
@@ -344,18 +385,13 @@ function animate() {
     }
     tactile.updateVisuals(dt);
   }
-
-  // ================== 新增：图表更新逻辑 ==================
   timeSinceLastChartUpdate += dt;
   if (timeSinceLastChartUpdate > CHART_UPDATE_INTERVAL) {
-    const newData = dataProcessor.getAndClearChartData();
-    if (newData) {
-      chartManager.update(newData);
-    }
+    const { rawData, forceData } = dataProcessor.getAndClearChartData() || {};
+    if (rawData) chartManager.updateRawChart(rawData);
+    if (forceData) chartManager.updateForceChart(forceData);
     timeSinceLastChartUpdate = 0;
   }
-  // ====================================================
-
   renderer.render(scene, camera);
 }
 

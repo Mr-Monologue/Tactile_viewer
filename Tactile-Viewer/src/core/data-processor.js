@@ -108,14 +108,14 @@ export class DataProcessor {
       0,
       1
     );
-
+    const rawZDelta = Math.abs(vecTotal.z);
     this.rawChartDataBuffer.push(z_amp_raw);
-
     // ================== 新增：计算标定后的力值 ==================
-    // 这是一个示例性的、简单的线性标定公式。
-    // 您需要根据您的传感器特性，替换成真实的标定公式。
+    // 根据传感器特性，计算标定因子
+    // 请根据您的传感器特性，替换成真实的标定公式。
     // 例如：力(N) = (原始值 * 增益) + 偏移
-    const forceValue = z_amp_raw * 10.0; // 假设满量程(1.0)对应10牛顿
+    const CALIBRATION_FACTOR = 0.263; //标定因子，请根据您的传感器特性，替换成真实的标定公式。
+    const forceValue = rawZDelta * CALIBRATION_FACTOR; // 力值 = 原始值 * 标定因子
     this.forceChartDataBuffer.push(forceValue);
     // ==========================================================
 
