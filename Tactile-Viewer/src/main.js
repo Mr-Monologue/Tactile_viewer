@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import { setupScene, setupResize } from "./core/scene-setup.js"; // 引入通用的setupResize，但我们在下面会覆盖它
+import { setupScene } from "./core/scene-setup.js";
 import { TactileLayer } from "./core/tactile-layer.js";
 import { frameToObject, mapAxes } from "./core/utils.js";
 import { DataProcessor } from "./core/data-processor.js";
@@ -14,24 +14,21 @@ import {
   disposeBoundsTree,
 } from "three-mesh-bvh";
 
+// 扩展 Three.js 原型以支持 BVH 加速：选择 three-mesh-bvh 是因为它能大幅提升复杂模型的射线检测性能
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-// --- Global State ---
 let current = null,
   aligner = null,
   mixer = null,
   tactile = null;
 const dataProcessor = new DataProcessor();
-// ================== 修改：初始化 4 个图表 ==================
 const chartManager = new ChartManager(
   { x: "x-chart", y: "y-chart", z: "z-chart", f: "force-chart" },
   { rawMax: 0.6, forceMax: 12.0 }
 );
-// ========================================================
 
-// --- UI Elements ---
 const btnConnect = document.getElementById("btnConnect");
 const statusOverlay = document.getElementById("status-overlay");
 const toolbarIcons = document.querySelectorAll(".toolbar-icon");
@@ -49,11 +46,11 @@ const toast = document.getElementById("toast-notification");
 
 statusOverlay.style.opacity = 1;
 
-// --- Initialize Scene ---
 const { scene, camera, renderer, controls, grid } = setupScene();
 document.getElementById("viewport").appendChild(renderer.domElement);
 
-// ================== 核心修复：回归最纯粹的标准 Resize 逻辑 ==================
+// 视图适配逻辑：使用 setViewOffset 让 3D 场景避开右侧数据面板，视觉上居中
+// 假设：数据面板占据右侧 1/3 空间，需要将相机视图向右偏移面板宽度的一半
 function setupStandardResize() {
   const viewport = document.getElementById("viewport");
   const dataPanel = document.getElementById("data-panel");
@@ -67,39 +64,31 @@ function setupStandardResize() {
     renderer.setSize(width, height);
     camera.aspect = width / height;
 
-    // 获取右侧面板的实际宽度 (现在是 1/3 屏幕宽)
     let panelWidth = 0;
     if (dataPanel) {
-      panelWidth = dataPanel.offsetWidth + 20; // 加上右边距
+      panelWidth = dataPanel.offsetWidth + 20;
     }
 
-    // 摄像机偏移：依然是面板宽度的一半，确保模型居中于剩余的 2/3 区域
+    // 相机偏移 = 面板宽度 / 2，使得模型在剩余空间居中
     const xOffset = panelWidth / 2;
     camera.setViewOffset(width, height, xOffset, 0, width, height);
 
     camera.updateProjectionMatrix();
     controls.update();
 
-    // ================== 提示框居中逻辑 (保持不变，但逻辑上现在是居中于2/3区域) ==================
-    // 左侧可用宽度 = 总宽度 - 面板宽度
-    const leftAvailableWidth = width - panelWidth;
-    // 提示框中心点 = 左侧可用宽度 / 2
-    const visualCenterX = leftAvailableWidth / 2;
-
+    // 状态提示框居中于左侧可见区域（2/3 宽度）
     if (statusOverlay) {
-      statusOverlay.style.left = `${visualCenterX}px`;
+      const leftAvailableWidth = width - panelWidth;
+      statusOverlay.style.left = `${leftAvailableWidth / 2}px`;
       statusOverlay.style.bottom = `${height * 0.15}px`;
     }
-    // ========================================================================================
   };
 
   new ResizeObserver(resize).observe(viewport);
   resize();
 }
 setupStandardResize();
-// =======================================================================
 
-// --- Loaders ---
 const loader = new GLTFLoader();
 const dracoLoader = new DRACOLoader().setDecoderPath(
   "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/"
@@ -107,7 +96,7 @@ const dracoLoader = new DRACOLoader().setDecoderPath(
 loader.setDRACOLoader(dracoLoader);
 loader.setMeshoptDecoder(MeshoptDecoder);
 
-// --- Core Logic ---
+// 模型加载：使用 aligner 包裹原模型以统一坐标变换，假设模型需要 -x, -y, +z 映射到标准 XYZ
 async function loadURL(url, name = "模型") {
   document.getElementById("info").textContent = `加载中：${name} ...`;
   try {
@@ -129,6 +118,7 @@ async function loadURL(url, name = "模型") {
       mixer.clipAction(gltf.animations[0]).play();
     }
 
+    // touch_area 网格作为触觉采样目标，需隐藏其材质以便只显示点云
     const touchArea = current.getObjectByName("touch_area");
     if (touchArea) {
       touchArea.traverse((o) => {
@@ -141,9 +131,9 @@ async function loadURL(url, name = "模型") {
     }
     const target = touchArea || current;
 
-    // 此时相机宽高比已正确，frameToObject 将完美居中
     frameToObject(camera, controls, aligner);
 
+    // 点间距根据模型尺寸动态调整：假设平均模型尺寸，除以 100 得到合适的采样密度
     const modelSize = new THREE.Box3()
       .setFromObject(aligner)
       .getSize(new THREE.Vector3())
@@ -185,6 +175,8 @@ function showToast(message) {
 }
 let toastTimer;
 
+// 状态机：管理 UI 状态与触觉层动画的同步
+// 关键假设：连接状态下禁用自动动画，断开时恢复
 function updateConnectionStatus(status) {
   switch (status) {
     case "virtual":
@@ -237,6 +229,7 @@ function resetView() {
   if (aligner) frameToObject(camera, controls, aligner);
 }
 
+// 工具栏互斥逻辑：同一时间只允许一个面板打开，点击已激活的图标会关闭面板
 function setupToolbar() {
   toolbarIcons.forEach((icon) => {
     icon.addEventListener("click", () => {
@@ -260,6 +253,7 @@ let port,
   keepReading = false,
   reader;
 
+// 断开逻辑：必须先取消 reader 才能安全关闭端口，否则会阻塞
 async function disconnectSerial() {
   btnConnect.disabled = true;
   btnConnect.textContent = "断开中...";
@@ -277,6 +271,7 @@ async function disconnectSerial() {
   btnConnect.disabled = false;
 }
 
+// 串口数据流：使用行缓冲处理不完整数据包，假设每行 12 个逗号分隔的浮点数
 async function connectAndReadSerial() {
   if (isConnected) {
     await disconnectSerial();
@@ -341,7 +336,6 @@ async function connectAndReadSerial() {
   }
 }
 
-// --- UI Event Listeners ---
 btnConnect.addEventListener("click", connectAndReadSerial);
 const fileInput = document.getElementById("file");
 fileInput.addEventListener("change", () => {
@@ -359,21 +353,14 @@ document.getElementById("chkAuto").addEventListener("change", (e) => {
 });
 const chkBg = document.getElementById("chkBg");
 chkBg.addEventListener("change", (e) => {
-  // 如果勾选 -> 纯黑背景 (0x0b0b0b)
-  // 如果不勾选 -> 透明背景 (null)，显示极光
   scene.background = e.target.checked ? new THREE.Color(0x0b0b0b) : null;
-  // 网格在纯色背景下显示，在极光背景下隐藏(以免太乱)
   grid.visible = e.target.checked;
 });
 
-// ================== 新增：初始化背景状态 ==================
-// 根据 HTML 中 checkbox 的默认状态来设置背景
-// 如果 index.html 里没有 checked 属性，这里就会设为透明
+// 背景初始化：根据 HTML checkbox 默认状态设置，默认透明以显示极光背景
 scene.background = chkBg.checked ? new THREE.Color(0x0b0b0b) : null;
 grid.visible = chkBg.checked;
-// ========================================================
 
-// ================== 新增：帮助模态窗口逻辑 ==================
 const btnHelp = document.getElementById("btnHelp");
 const helpModal = document.getElementById("help-modal");
 const closeHelp = document.querySelector(".close-modal");
@@ -394,7 +381,6 @@ if (closeHelp) {
   closeHelp.addEventListener("click", () => toggleHelpModal(false));
 }
 
-// 点击遮罩层也可以关闭
 if (helpModal) {
   helpModal.addEventListener("click", (e) => {
     if (e.target === helpModal) {
@@ -402,14 +388,10 @@ if (helpModal) {
     }
   });
 }
-// ==========================================================
 
-// ================== 新增：获取联系我们元素 ==================
 const btnContactModal = document.getElementById("btnContact");
 const contactModal = document.getElementById("contact-modal");
-// ========================================================
 
-// ================== 新增：联系模态窗口逻辑 ==================
 function toggleContactModal(show) {
   if (show) {
     contactModal.classList.add("active");
@@ -423,9 +405,8 @@ if (btnContactModal) {
 }
 
 if (contactModal) {
-  // 点击遮罩层关闭
+  // 点击检测：只有点击遮罩本身或其直接子元素才关闭，避免卡片交互触发关闭
   contactModal.addEventListener("click", (e) => {
-    // 确保只有点击背景（而不是卡片本身）时才关闭
     if (
       e.target === contactModal ||
       e.target.classList.contains("contact-modal-body")
@@ -434,19 +415,20 @@ if (contactModal) {
     }
   });
 }
-// ==========================================================
 
-// --- Animation Loop ---
 const clock = new THREE.Clock();
 let timeSinceLastChartUpdate = 0;
 const CHART_UPDATE_INTERVAL = 0.1;
 
+// 主循环：触觉层需要每帧更新相机向量以保持 billboard 效果（始终面向相机）
+// 节流策略：图表更新频率设为 10Hz，避免过度渲染影响性能
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   controls.update();
   mixer?.update(dt);
   if (tactile?.running) {
+    // billboard 效果：使用相机矩阵的列向量作为 right/up 方向
     tactile.matDisks.uniforms.camRight.value.setFromMatrixColumn(
       camera.matrixWorld,
       0
@@ -463,19 +445,14 @@ function animate() {
   timeSinceLastChartUpdate += dt;
   if (timeSinceLastChartUpdate > CHART_UPDATE_INTERVAL) {
     const { rawData, forceData } = dataProcessor.getAndClearChartData() || {};
-
-    // ================== 修改：调用新的统一更新方法 ==================
     if (rawData || forceData) {
       chartManager.updateCharts(rawData, forceData);
     }
-    // ==========================================================
-
     timeSinceLastChartUpdate = 0;
   }
   renderer.render(scene, camera);
 }
 
-// --- Initial Load ---
 setupToolbar();
 animate();
 loadURL("/finger_1.glb", "默认模型");

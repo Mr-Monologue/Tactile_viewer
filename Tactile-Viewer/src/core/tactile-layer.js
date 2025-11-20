@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
+// 触觉可视化层：在 3D 模型表面生成六角网格点云，并根据传感器数据实时更新颜色和强度
 export class TactileLayer {
   constructor(scene, parentMesh, options = {}) {
     this.scene = scene;
@@ -8,6 +9,7 @@ export class TactileLayer {
     this.spacing = options.spacing ?? 0.05;
     const maxPoints = options.maxPoints ?? 8000;
 
+    // 实例化网格：使用 Billboard 技术（面片始终面向相机），提升性能和视觉效果
     this.attrCol = new THREE.BufferAttribute(
       new Float32Array(maxPoints * 3),
       3
@@ -72,6 +74,8 @@ export class TactileLayer {
     /* ... */
   }
 
+  // 六角网格生成：使用射线检测在模型表面采样，形成均匀的六角排列
+  // 关键假设：模型表面法向量指向相机方向，以此构建 UV 坐标系
   async generateHexGrid(camera) {
     console.time("Hex Grid Generation");
     document.getElementById("info").textContent = "正在生成六角网格...";
@@ -84,6 +88,7 @@ export class TactileLayer {
     });
     if (!meshes.length) return;
 
+    // 合并所有子网格为单一几何体，简化射线检测
     const geos = meshes.map((m) =>
       m.geometry.clone().applyMatrix4(m.matrixWorld)
     );
@@ -93,6 +98,7 @@ export class TactileLayer {
     merged.computeBoundsTree();
     const targetMesh = new THREE.Mesh(merged);
 
+    // 采样顶点以确定网格范围：每 3000 个顶点采样一个，平衡精度与性能
     const verts = [];
     const posAttr = merged.getAttribute("position");
     const step = Math.max(1, Math.ceil(posAttr.count / 3000));
@@ -104,6 +110,7 @@ export class TactileLayer {
       .reduce((a, b) => a.add(b), new THREE.Vector3())
       .multiplyScalar(1 / verts.length);
 
+    // 计算表面法向量：使用从相机到中心的射线检测第一个交点
     const raycasterForNormal = new THREE.Raycaster();
     const toCam = camera.position.clone().sub(center).normalize();
     raycasterForNormal.set(camera.position, toCam.clone().negate());
@@ -117,11 +124,13 @@ export class TactileLayer {
           .transformDirection(targetMesh.matrixWorld)
       : new THREE.Vector3(0, 0, 1);
 
+    // 构建 UV 坐标系：U 和 V 垂直于法向量，形成切平面
     let U = new THREE.Vector3(1, 0, 0);
     if (Math.abs(normal.x) > 0.9) U.set(0, 1, 0);
     U.sub(normal.clone().multiplyScalar(U.dot(normal))).normalize();
     const V = new THREE.Vector3().crossVectors(normal, U).normalize();
 
+    // 计算网格边界
     let umin = Infinity,
       umax = -Infinity,
       vmin = Infinity,
@@ -142,12 +151,14 @@ export class TactileLayer {
     vmin -= pad;
     vmax += pad;
 
+    // 六角网格参数：水平间距 du，垂直间距 dv = du * sqrt(3) / 2（六角网格特性）
     const du = this.spacing;
     const dv = this.spacing * Math.sqrt(3) * 0.5;
 
     const raycaster = new THREE.Raycaster();
     raycaster.firstHitOnly = true;
 
+    // 射线起点偏移：从表面外侧向内投射，避免边界问题
     const diag =
       new THREE.Box3()
         .setFromObject(this.mesh)
@@ -159,6 +170,7 @@ export class TactileLayer {
     const maxInstances = this.disks.count;
     const tmpN = new THREE.Vector3();
 
+    // 六角网格采样：奇偶行错位（uOffset），形成六角排列
     for (let row = 0, v_coord = vmin; v_coord <= vmax; row++, v_coord += dv) {
       const uOffset = row % 2 ? du * 0.5 : 0;
       for (let u_coord = umin + uOffset; u_coord <= umax; u_coord += du) {
@@ -175,15 +187,13 @@ export class TactileLayer {
             .transformDirection(targetMesh.matrixWorld)
             .normalize();
 
-          // ================== BUG 修复：交换U和V的赋值 ==================
+          // UV 坐标映射：注意 u 和 v 的对应关系（X↔V, Y↔U）
           chosen.push({
             pos: hit.point.clone(),
             nrm: tmpN.clone(),
-            // X轴对应U，Y轴对应V
             v: (u_coord - umin) / (umax - umin),
             u: (v_coord - vmin) / (vmax - vmin),
           });
-          // ==========================================================
 
           if (chosen.length >= maxInstances) break;
         }
@@ -240,10 +250,12 @@ export class TactileLayer {
     this._center = bbox.getCenter(new THREE.Vector3());
   }
 
+  // 传感器数据映射：将归一化的传感器坐标 (-1~1) 映射到网格的 UV 坐标 (0~1)
+  // 使用最近邻查找：假设传感器坐标与网格 UV 坐标线性对应
   updateFromSensorData(sensorX, sensorY, intensity) {
     if (this.finalPoints.length === 0) return;
 
-    const x_gain = 1.2; // <--- 您可以调整这个“XY活动范围”系数
+    const x_gain = 1.2;
     const y_gain = 1.2;
 
     const u = (sensorX * x_gain + 1) / 2;
@@ -271,8 +283,8 @@ export class TactileLayer {
     }
   }
 
+  // 视觉更新：基于按压中心计算每个点的颜色和强度，使用指数衰减模拟压力扩散
   updateVisuals(dt) {
-    // ... (This function is unchanged from the previous version)
     if (this.animationState) this._updatePressAnimation(dt);
     if (this.finalPoints.length === 0) return;
     const colArr = this.attrCol.array;
@@ -283,13 +295,16 @@ export class TactileLayer {
         intensArr[k] = 0;
       }
     } else {
+      // 影响半径：设为 15 倍点间距，确保压力效果可见
       const pressRadius = this.spacing * 15;
       const pressRadiusSq = pressRadius * pressRadius;
       for (let k = 0; k < this.finalPoints.length; k++) {
         const point = this.finalPoints[k];
         const distSq = point.pos.distanceToSquared(this.pressCenter);
+        // 指数衰减：exp(-4*d²/r²)，系数 -4 控制衰减速度
         const falloff = Math.exp((-4 * distSq) / pressRadiusSq);
         const influence = falloff * this.pressIntensity;
+        // 颜色插值：低强度时绿→橙，高强度时橙→红
         if (influence < 0.5) {
           this.tempColor
             .copy(this.originalColor)
@@ -307,6 +322,7 @@ export class TactileLayer {
     this.disks.geometry.getAttribute("intensity").needsUpdate = !0;
   }
 
+  // 自动演示动画：未连接设备时播放随机按压动画，展示系统能力
   _updatePressAnimation(dt) {
     this.stateTimer -= dt;
     switch (this.animationState) {
