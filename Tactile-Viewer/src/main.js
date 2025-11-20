@@ -373,6 +373,69 @@ scene.background = chkBg.checked ? new THREE.Color(0x0b0b0b) : null;
 grid.visible = chkBg.checked;
 // ========================================================
 
+// ================== 新增：帮助模态窗口逻辑 ==================
+const btnHelp = document.getElementById("btnHelp");
+const helpModal = document.getElementById("help-modal");
+const closeHelp = document.querySelector(".close-modal");
+
+function toggleHelpModal(show) {
+  if (show) {
+    helpModal.classList.add("active");
+  } else {
+    helpModal.classList.remove("active");
+  }
+}
+
+if (btnHelp) {
+  btnHelp.addEventListener("click", () => toggleHelpModal(true));
+}
+
+if (closeHelp) {
+  closeHelp.addEventListener("click", () => toggleHelpModal(false));
+}
+
+// 点击遮罩层也可以关闭
+if (helpModal) {
+  helpModal.addEventListener("click", (e) => {
+    if (e.target === helpModal) {
+      toggleHelpModal(false);
+    }
+  });
+}
+// ==========================================================
+
+// ================== 新增：获取联系我们元素 ==================
+const btnContactModal = document.getElementById("btnContact");
+const contactModal = document.getElementById("contact-modal");
+// ========================================================
+
+// ================== 新增：联系模态窗口逻辑 ==================
+function toggleContactModal(show) {
+  if (show) {
+    contactModal.classList.add("active");
+  } else {
+    contactModal.classList.remove("active");
+  }
+}
+
+if (btnContactModal) {
+  btnContactModal.addEventListener("click", () => toggleContactModal(true));
+}
+
+if (contactModal) {
+  // 点击遮罩层关闭
+  contactModal.addEventListener("click", (e) => {
+    // 确保只有点击背景（而不是卡片本身）时才关闭
+    if (
+      e.target === contactModal ||
+      e.target.classList.contains("contact-modal-body")
+    ) {
+      toggleContactModal(false);
+    }
+  });
+}
+// ==========================================================
+
 // --- Animation Loop ---
 const clock = new THREE.Clock();
 let timeSinceLastChartUpdate = 0;

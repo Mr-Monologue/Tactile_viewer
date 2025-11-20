@@ -468,3 +468,358 @@ input[type=file] {
     flex: 2;
 }
 /* ======================================================== */
+
+/* ================== 帮助模态窗口样式 ================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* 背景遮罩 */
+    backdrop-filter: blur(4px);
+    z-index: 1000; /* 确保在最顶层 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #334155;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #e2e8f0;
+}
+
+.close-modal {
+    color: #94a3b8;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: #fff;
+}
+
+.modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.help-item {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.help-icon {
+    font-size: 20px;
+    color: #4ade80; /* 使用主题绿色 */
+    margin-top: 4px;
+    width: 24px;
+    text-align: center;
+}
+
+.help-text h3 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    color: #e2e8f0;
+}
+
+.help-text p {
+    margin: 0;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.help-text code {
+    background-color: #0f172a;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: monospace;
+    color: #cbd5e1;
+}
+
+.help-footer {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px dashed #334155;
+    text-align: center;
+}
+
+.help-footer p {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+/* ======================================================== */
+
+/* ================== 联系我们模态窗口布局 ================== */
+.contact-modal-body {
+    display: flex;
+    gap: 40px; /* 两个卡片之间的间距 */
+    align-items: center;
+    justify-content: center;
+    /* 稍微放大一点，让卡片看清楚 */
+    transform: scale(1.2);
+}
+
+/* ================== 赛博卡片样式 (已重命名以避免冲突) ================== */
+.cyber-container {
+  position: relative;
+  width: 190px;
+  height: 254px;
+  transition: 200ms;
+}
+
+.cyber-container:active {
+  width: 180px;
+  height: 245px;
+}
+
+.cyber-card {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 20px;
+  transition: 700ms;
+  background: linear-gradient(45deg, #1a1a1a, #262626);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+.card-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 二维码占位符样式 */
+.qr-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    z-index: 10;
+}
+
+/* 如果您有真实的二维码图片，请使用这个样式 */
+.qr-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.title {
+  opacity: 1; /* 默认显示，或者您可以保持 opacity:0 让它hover时显示 */
+  transition: 300ms ease-in-out;
+  position: absolute;
+  font-size: 24px; /* 稍微调小一点 */
+  font-weight: 800;
+  letter-spacing: 4px;
+  text-align: center;
+  width: 100%;
+  padding-top: 20px;
+  background: linear-gradient(45deg, #00ffaa, #00a2ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 15px rgba(0, 255, 170, 0.3));
+  text-shadow: 0 0 10px rgba(92, 103, 255, 0.5), 0 0 20px rgba(92, 103, 255, 0.3);
+}
+
+.subtitle {
+  position: absolute;
+  bottom: 30px;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.highlight {
+  color: #00ffaa;
+  margin-left: 5px;
+  background: linear-gradient(90deg, #5c67ff, #ad51ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+}
+
+.glowing-elements { position: absolute; inset: 0; pointer-events: none; }
+
+.card-glare { position: absolute; inset: 0; background: linear-gradient(125deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 55%, rgba(255, 255, 255, 0) 100%); opacity: 0; transition: opacity 300ms; }
+
+.cyber-lines span { position: absolute; background: linear-gradient(90deg, transparent, rgba(92, 103, 255, 0.2), transparent); }
+
+.cyber-lines span:nth-child(1) { top: 20%; left: 0; width: 100%; height: 1px; transform: scaleX(0); transform-origin: left; animation: lineGrow 3s linear infinite; }
+
+.cyber-lines span:nth-child(2) { top: 40%; right: 0; width: 100%; height: 1px; transform: scaleX(0); transform-origin: right; animation: lineGrow 3s linear infinite 1s; }
+
+.cyber-lines span:nth-child(3) { top: 60%; left: 0; width: 100%; height: 1px; transform: scaleX(0); transform-origin: left; animation: lineGrow 3s linear infinite 2s; }
+
+.cyber-lines span:nth-child(4) { top: 80%; right: 0; width: 100%; height: 1px; transform: scaleX(0); transform-origin: right; animation: lineGrow 3s linear infinite 1.5s; }
+
+.card-particles span { position: absolute; width: 3px; height: 3px; background: #00ffaa; border-radius: 50%; opacity: 0; transition: opacity 0.3s ease; }
+
+.card-particles span:nth-child(1) { --x: 1; --y: -1; top: 40%; left: 20%; }
+
+.card-particles span:nth-child(2) { --x: -1; --y: -1; top: 60%; right: 20%; }
+
+.card-particles span:nth-child(3) { --x: 0.5; --y: 1; top: 20%; left: 40%; }
+
+.card-particles span:nth-child(4) { --x: -0.5; --y: 1; top: 80%; right: 40%; }
+
+.card-particles span:nth-child(5) { --x: 1; --y: 0.5; top: 30%; left: 60%; }
+
+.card-particles span:nth-child(6) { --x: -1; --y: 0.5; top: 70%; right: 60%; }
+
+.corner-elements span { position: absolute; width: 15px; height: 15px; border: 2px solid rgba(92, 103, 255, 0.3); transition: all 0.3s ease; }
+
+.corner-elements span:nth-child(1) { top: 10px; left: 10px; border-right: 0; border-bottom: 0; }
+
+.corner-elements span:nth-child(2) { top: 10px; right: 10px; border-left: 0; border-bottom: 0; }
+
+.corner-elements span:nth-child(3) { bottom: 10px; left: 10px; border-right: 0; border-top: 0; }
+
+.corner-elements span:nth-child(4) { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+
+.scan-line { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent, rgba(92, 103, 255, 0.1), transparent); transform: translateY(-100%); animation: scanMove 2s linear infinite; }
+
+/* Hover Effects */
+.tracker:hover ~ .cyber-card .title { opacity: 1; transform: translateY(-5px); }
+
+.tracker:hover ~ .cyber-card .card-particles span { animation: particleFloat 2s infinite; }
+
+.tracker:hover ~ .cyber-card::before { opacity: 1; }
+
+.tracker:hover ~ .cyber-card { transition: 300ms; filter: brightness(1.1); }
+
+.tracker:hover ~ .cyber-card .corner-elements span { border-color: rgba(92, 103, 255, 0.8); box-shadow: 0 0 10px rgba(92, 103, 255, 0.5); }
+
+.cyber-container:hover .cyber-card::before { transition: 200ms; content: ""; opacity: 0.8; }
+
+/* Tracker Grid (Perspective Logic) */
+.cyber-canvas { perspective: 800px; inset: 0; z-index: 200; position: absolute; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); }
+
+.tracker { position: absolute; z-index: 200; width: 100%; height: 100%; cursor: pointer; }
+
+.tr-1 { grid-area: 1 / 1 / 2 / 2; } .tr-2 { grid-area: 1 / 2 / 2 / 3; } .tr-3 { grid-area: 1 / 3 / 2 / 4; } .tr-4 { grid-area: 1 / 4 / 2 / 5; } .tr-5 { grid-area: 1 / 5 / 2 / 6; }
+
+.tr-6 { grid-area: 2 / 1 / 3 / 2; } .tr-7 { grid-area: 2 / 2 / 3 / 3; } .tr-8 { grid-area: 2 / 3 / 3 / 4; } .tr-9 { grid-area: 2 / 4 / 3 / 5; } .tr-10 { grid-area: 2 / 5 / 3 / 6; }
+
+.tr-11 { grid-area: 3 / 1 / 4 / 2; } .tr-12 { grid-area: 3 / 2 / 4 / 3; } .tr-13 { grid-area: 3 / 3 / 4 / 4; } .tr-14 { grid-area: 3 / 4 / 4 / 5; } .tr-15 { grid-area: 3 / 5 / 4 / 6; }
+
+.tr-16 { grid-area: 4 / 1 / 5 / 2; } .tr-17 { grid-area: 4 / 2 / 5 / 3; } .tr-18 { grid-area: 4 / 3 / 5 / 4; } .tr-19 { grid-area: 4 / 4 / 5 / 5; } .tr-20 { grid-area: 4 / 5 / 5 / 6; }
+
+.tr-21 { grid-area: 5 / 1 / 6 / 2; } .tr-22 { grid-area: 5 / 2 / 6 / 3; } .tr-23 { grid-area: 5 / 3 / 6 / 4; } .tr-24 { grid-area: 5 / 4 / 6 / 5; } .tr-25 { grid-area: 5 / 5 / 6 / 6; }
+
+.tr-1:hover ~ .cyber-card { transform: rotateX(20deg) rotateY(-10deg); }
+
+.tr-2:hover ~ .cyber-card { transform: rotateX(20deg) rotateY(-5deg); }
+
+.tr-3:hover ~ .cyber-card { transform: rotateX(20deg) rotateY(0deg); }
+
+.tr-4:hover ~ .cyber-card { transform: rotateX(20deg) rotateY(5deg); }
+
+.tr-5:hover ~ .cyber-card { transform: rotateX(20deg) rotateY(10deg); }
+
+.tr-6:hover ~ .cyber-card { transform: rotateX(10deg) rotateY(-10deg); }
+
+.tr-7:hover ~ .cyber-card { transform: rotateX(10deg) rotateY(-5deg); }
+
+.tr-8:hover ~ .cyber-card { transform: rotateX(10deg) rotateY(0deg); }
+
+.tr-9:hover ~ .cyber-card { transform: rotateX(10deg) rotateY(5deg); }
+
+.tr-10:hover ~ .cyber-card { transform: rotateX(10deg) rotateY(10deg); }
+
+.tr-11:hover ~ .cyber-card { transform: rotateX(0deg) rotateY(-10deg); }
+
+.tr-12:hover ~ .cyber-card { transform: rotateX(0deg) rotateY(-5deg); }
+
+.tr-13:hover ~ .cyber-card { transform: rotateX(0deg) rotateY(0deg); }
+
+.tr-14:hover ~ .cyber-card { transform: rotateX(0deg) rotateY(5deg); }
+
+.tr-15:hover ~ .cyber-card { transform: rotateX(0deg) rotateY(10deg); }
+
+.tr-16:hover ~ .cyber-card { transform: rotateX(-10deg) rotateY(-10deg); }
+
+.tr-17:hover ~ .cyber-card { transform: rotateX(-10deg) rotateY(-5deg); }
+
+.tr-18:hover ~ .cyber-card { transform: rotateX(-10deg) rotateY(0deg); }
+
+.tr-19:hover ~ .cyber-card { transform: rotateX(-10deg) rotateY(5deg); }
+
+.tr-20:hover ~ .cyber-card { transform: rotateX(-10deg) rotateY(10deg); }
+
+.tr-21:hover ~ .cyber-card { transform: rotateX(-20deg) rotateY(-10deg); }
+
+.tr-22:hover ~ .cyber-card { transform: rotateX(-20deg) rotateY(-5deg); }
+
+.tr-23:hover ~ .cyber-card { transform: rotateX(-20deg) rotateY(0deg); }
+
+.tr-24:hover ~ .cyber-card { transform: rotateX(-20deg) rotateY(5deg); }
+
+.tr-25:hover ~ .cyber-card { transform: rotateX(-20deg) rotateY(10deg); }
+
+.noselect { -webkit-user-select: none; user-select: none; }
+
+@keyframes lineGrow { 0% { transform: scaleX(0); opacity: 0; } 50% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(0); opacity: 0; } }
+
+@keyframes scanMove { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+
+@keyframes particleFloat { 0% { transform: translate(0, 0); opacity: 0; } 50% { opacity: 1; } 100% { transform: translate(calc(var(--x, 0) * 30px), calc(var(--y, 0) * 30px)); opacity: 0; } }
+/* ======================================================== */

@@ -23,6 +23,13 @@
           <div class="toolbar-icon" data-panel="device-panel"><i class="fa-solid fa-unlink"></i></div>
           <div class="toolbar-icon" data-panel="model-panel"><i class="fa-solid fa-cube"></i></div>
           <div class="toolbar-icon" data-panel="display-panel"><i class="fa-solid fa-video"></i></div>
+
+          <!-- ================== 新增：帮助按钮 (使用 flex-grow 推到底部) ================== -->
+          <div class="toolbar-spacer" style="flex-grow: 1;"></div>
+          <div class="toolbar-icon" id="btnHelp" title="使用指南"><i class="fa-solid fa-circle-question"></i></div>
+          <!-- ================== 新增：联系我们图标 ================== -->
+          <div class="toolbar-icon" id="btnContact" title="联系我们"><i class="fa-solid fa-qrcode"></i></div>
+          <!-- ====================================================== -->
         </div>
         <div class="dock-panel" id="device-panel">
           <div class="panel-title">设备控制</div>
@@ -104,6 +111,110 @@
   <!-- ================== 重新添加消息通知栏 ================== -->
   <div id="toast-notification"></div>
   <!-- ======================================================= -->
+
+  <!-- ================== 新增：帮助模态窗口 ================== -->
+  <div id="help-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>使用指南</h2>
+        <span class="close-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="help-item">
+          <i class="fa-solid fa-link help-icon"></i>
+          <div class="help-text">
+            <h3>1. 连接传感器</h3>
+            <p>点击左上角的"断开链接"图标，打开设备控制面板。点击"连接设备"，选择您的 CH340 串口并确认。</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <i class="fa-solid fa-cube help-icon"></i>
+          <div class="help-text">
+            <h3>2. 导入模型</h3>
+            <p>默认加载示例模型。您也可以点击"模型操作"图标，导入您自己的 .glb/.gltf 文件。</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <i class="fa-solid fa-chart-line help-icon"></i>
+          <div class="help-text">
+            <h3>3. 实时数据</h3>
+            <p>右侧图表展示实时的 X/Y 偏移和 Z 轴压力。3D 模型上的点云颜色会随压力从绿变红。</p>
+          </div>
+        </div>
+        <div class="help-footer">
+          <p>鼠标左键旋转 · 右键平移 · 滚轮缩放</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ======================================================= -->
+
+  <!-- ================== 新增：联系我们模态窗口 (双赛博卡片) ================== -->
+  <div id="contact-modal" class="modal-overlay">
+    <!-- 注意：点击遮罩关闭 -->
+    <div class="contact-modal-body">
+      <!-- 卡片 1：微信/联系方式 A -->
+      <div class="cyber-container noselect">
+        <div class="cyber-canvas">
+          <!-- 追踪器网格 (用于3D倾斜效果) -->
+          <div class="tracker tr-1"></div><div class="tracker tr-2"></div><div class="tracker tr-3"></div><div class="tracker tr-4"></div><div class="tracker tr-5"></div>
+          <div class="tracker tr-6"></div><div class="tracker tr-7"></div><div class="tracker tr-8"></div><div class="tracker tr-9"></div><div class="tracker tr-10"></div>
+          <div class="tracker tr-11"></div><div class="tracker tr-12"></div><div class="tracker tr-13"></div><div class="tracker tr-14"></div><div class="tracker tr-15"></div>
+          <div class="tracker tr-16"></div><div class="tracker tr-17"></div><div class="tracker tr-18"></div><div class="tracker tr-19"></div><div class="tracker tr-20"></div>
+          <div class="tracker tr-21"></div><div class="tracker tr-22"></div><div class="tracker tr-23"></div><div class="tracker tr-24"></div><div class="tracker tr-25"></div>
+
+          <div class="cyber-card">
+            <div class="card-content">
+              <div class="card-glare"></div>
+              <div class="cyber-lines"><span></span><span></span><span></span><span></span></div>
+              <div class="title">技术支持</div>
+              <div class="subtitle"><span>SCAN</span><span class="highlight">QR CODE</span></div>
+
+              <!-- 这里的 div 是放置二维码的地方 -->
+              <div class="qr-placeholder">
+                <i class="fa-brands fa-weixin" style="font-size: 60px; color: #00ffaa;"></i>
+              </div>
+
+              <div class="card-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="corner-elements"><span></span><span></span><span></span><span></span></div>
+              <div class="scan-line"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片 2：官网/联系方式 B -->
+      <div class="cyber-container noselect">
+        <div class="cyber-canvas">
+          <div class="tracker tr-1"></div><div class="tracker tr-2"></div><div class="tracker tr-3"></div><div class="tracker tr-4"></div><div class="tracker tr-5"></div>
+          <div class="tracker tr-6"></div><div class="tracker tr-7"></div><div class="tracker tr-8"></div><div class="tracker tr-9"></div><div class="tracker tr-10"></div>
+          <div class="tracker tr-11"></div><div class="tracker tr-12"></div><div class="tracker tr-13"></div><div class="tracker tr-14"></div><div class="tracker tr-15"></div>
+          <div class="tracker tr-16"></div><div class="tracker tr-17"></div><div class="tracker tr-18"></div><div class="tracker tr-19"></div><div class="tracker tr-20"></div>
+          <div class="tracker tr-21"></div><div class="tracker tr-22"></div><div class="tracker tr-23"></div><div class="tracker tr-24"></div><div class="tracker tr-25"></div>
+
+          <div class="cyber-card">
+            <div class="card-content">
+              <div class="card-glare"></div>
+              <div class="cyber-lines"><span></span><span></span><span></span><span></span></div>
+              <div class="title">官方网站</div>
+              <div class="subtitle"><span>VISIT</span><span class="highlight">WEBSITE</span></div>
+
+              <!-- 这里的 div 是放置二维码的地方 -->
+              <div class="qr-placeholder">
+                <i class="fa-solid fa-globe" style="font-size: 60px; color: #00a2ff;"></i>
+              </div>
+
+              <div class="card-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="corner-elements"><span></span><span></span><span></span><span></span></div>
+              <div class="scan-line"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ====================================================================== -->
+
   <script type="module" src="/src/main.js"></script>
 </body>
 
