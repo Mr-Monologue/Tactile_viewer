@@ -4,11 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GLB + 虚拟触觉演示 (最终稳定版)</title>
+  <title>触觉演示</title>
+  <!-- ================== 1. 添加 Favicon (请确保public文件夹里有favicon.svg或.png) ================== -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.png" />
+  <!-- ========================================================================================== -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 
 <body>
+  <!-- ================== 2. 新增：极光背景层 ================== -->
+  <div id="background-layer" class="aurora-container"></div>
+  <!-- ======================================================= -->
   <div id="app">
     <div id="main-content">
       <div id="viewport">
@@ -39,25 +45,55 @@
             <span>自动旋转</span>
             <input id="chkAuto" type="checkbox" checked />
           </label>
+
           <label class="switch" for="chkBg">
-            <span>暗色背景</span>
-            <input id="chkBg" type="checkbox" checked />
+            <span>纯色背景</span>
+            <input id="chkBg" type="checkbox" />
           </label>
         </div>
+        <!-- ================== 数据面板：拆分为4个独立图表 ================== -->
         <div id="data-panel">
-          <div class="chart-widget">
-            <div class="panel-title">原始数据曲线</div>
+          <!-- X轴图表 (占1份) -->
+          <div class="chart-widget chart-flex-1">
+            <div class="panel-title" style="color: #ff5252;">X 轴偏移</div>
             <div class="panel-content">
-              <div id="raw-chart-container"><canvas id="raw-pressure-chart"></canvas></div>
+              <div id="x-chart-container" style="position: relative; flex: 1;">
+                <canvas id="x-chart"></canvas>
+              </div>
             </div>
           </div>
-          <div class="chart-widget">
-            <div class="panel-title">标定力曲线 (N)</div>
+
+          <!-- Y轴图表 (占1份) -->
+          <div class="chart-widget chart-flex-1">
+            <div class="panel-title" style="color: #69f0ae;">Y 轴偏移</div>
             <div class="panel-content">
-              <div id="force-chart-container"><canvas id="force-chart"></canvas></div>
+              <div id="y-chart-container" style="position: relative; flex: 1;">
+                <canvas id="y-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Z轴图表 (占2份) -->
+          <div class="chart-widget chart-flex-2">
+            <div class="panel-title" style="color: #448aff;">Z 轴 (原始压力)</div>
+            <div class="panel-content">
+              <div id="z-chart-container" style="position: relative; flex: 1;">
+                <canvas id="z-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 力值图表 (占2份) -->
+          <div class="chart-widget chart-flex-2">
+            <div class="panel-title" style="color: #ffc300;">标定力曲线 (N)</div>
+            <div class="panel-content">
+              <div id="force-chart-container" style="position: relative; flex: 1;">
+                <canvas id="force-chart"></canvas>
+              </div>
             </div>
           </div>
         </div>
+        <!-- =============================================================== -->
       </div>
     </div>
     <div id="hud">

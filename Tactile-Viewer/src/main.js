@@ -24,10 +24,12 @@ let current = null,
   mixer = null,
   tactile = null;
 const dataProcessor = new DataProcessor();
-const chartManager = new ChartManager("raw-pressure-chart", "force-chart", {
-  rawMax: 0.6,
-  forceMax: 12.0,
-});
+// ================== 修改：初始化 4 个图表 ==================
+const chartManager = new ChartManager(
+  { x: "x-chart", y: "y-chart", z: "z-chart", f: "force-chart" },
+  { rawMax: 0.6, forceMax: 12.0 }
+);
+// ========================================================
 
 // --- UI Elements ---
 const btnConnect = document.getElementById("btnConnect");
@@ -62,34 +64,33 @@ function setupStandardResize() {
     const width = Math.max(1, rect.width);
     const height = Math.max(1, rect.height);
 
-    // 1. 渲染器全屏
     renderer.setSize(width, height);
     camera.aspect = width / height;
 
-    // 2. 获取右侧面板的实际宽度
+    // 获取右侧面板的实际宽度 (现在是 1/3 屏幕宽)
     let panelWidth = 0;
     if (dataPanel) {
       panelWidth = dataPanel.offsetWidth + 20; // 加上右边距
     }
 
-    // 3. 计算相机偏移 (让模型居中于剩余空间)
-    // 偏移量 = 面板宽度 / 2
+    // 摄像机偏移：依然是面板宽度的一半，确保模型居中于剩余的 2/3 区域
     const xOffset = panelWidth / 2;
     camera.setViewOffset(width, height, xOffset, 0, width, height);
 
     camera.updateProjectionMatrix();
     controls.update();
 
-    // 4. 【新功能】同步设置提示框的位置
-    // 视觉中心X = (总宽度 - 面板宽度) / 2
-    const visualCenterX = (width - panelWidth) / 2;
+    // ================== 提示框居中逻辑 (保持不变，但逻辑上现在是居中于2/3区域) ==================
+    // 左侧可用宽度 = 总宽度 - 面板宽度
+    const leftAvailableWidth = width - panelWidth;
+    // 提示框中心点 = 左侧可用宽度 / 2
+    const visualCenterX = leftAvailableWidth / 2;
 
-    // 设置提示框位置
     if (statusOverlay) {
       statusOverlay.style.left = `${visualCenterX}px`;
-      // 固定在底部 15% 的位置，避开模型
       statusOverlay.style.bottom = `${height * 0.15}px`;
     }
+    // ========================================================================================
   };
 
   new ResizeObserver(resize).observe(viewport);
@@ -356,10 +357,21 @@ document.getElementById("btnReset").addEventListener("click", resetView);
 document.getElementById("chkAuto").addEventListener("change", (e) => {
   controls.autoRotate = e.target.checked;
 });
-document.getElementById("chkBg").addEventListener("change", (e) => {
-  scene.background.set(e.target.checked ? 0x0b0b0b : 0xf8fafc);
-  grid.visible = !e.target.checked;
+const chkBg = document.getElementById("chkBg");
+chkBg.addEventListener("change", (e) => {
+  // 如果勾选 -> 纯黑背景 (0x0b0b0b)
+  // 如果不勾选 -> 透明背景 (null)，显示极光
+  scene.background = e.target.checked ? new THREE.Color(0x0b0b0b) : null;
+  // 网格在纯色背景下显示，在极光背景下隐藏(以免太乱)
+  grid.visible = e.target.checked;
 });
+
+// ================== 新增：初始化背景状态 ==================
+// 根据 HTML 中 checkbox 的默认状态来设置背景
+// 如果 index.html 里没有 checked 属性，这里就会设为透明
+scene.background = chkBg.checked ? new THREE.Color(0x0b0b0b) : null;
+grid.visible = chkBg.checked;
+// ========================================================
 
 // --- Animation Loop ---
 const clock = new THREE.Clock();
@@ -388,8 +400,13 @@ function animate() {
   timeSinceLastChartUpdate += dt;
   if (timeSinceLastChartUpdate > CHART_UPDATE_INTERVAL) {
     const { rawData, forceData } = dataProcessor.getAndClearChartData() || {};
-    if (rawData) chartManager.updateRawChart(rawData);
-    if (forceData) chartManager.updateForceChart(forceData);
+
+    // ================== 修改：调用新的统一更新方法 ==================
+    if (rawData || forceData) {
+      chartManager.updateCharts(rawData, forceData);
+    }
+    // ==========================================================
+
     timeSinceLastChartUpdate = 0;
   }
   renderer.render(scene, camera);

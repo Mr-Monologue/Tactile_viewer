@@ -105,6 +105,7 @@ export class DataProcessor {
     let totalWeight = 0;
     let maxWeight = 0;
 
+    // 1. 计算每个传感器的变化向量和权重
     for (let i = 0; i < 4; i++) {
       // 计算该传感器的变化向量
       const d = currentVectors[i].clone().sub(this.zeroBaseline[i]);
@@ -120,48 +121,61 @@ export class DataProcessor {
       if (w > maxWeight) maxWeight = w;
     }
 
-    // console.log(
-    //   "Delta Z:",
-    //   delta.map((v) => v.z.toFixed(1))
-    // );
-
-    // 将原始总压力推入图表缓冲区
+    // 2. 计算原始总压力值（用于后续处理）
     const rawZTotal = totalWeight / 4; // 取平均值作为总压力指标
     const z_amp_visual = THREE.MathUtils.clamp(rawZTotal / ADC_FULL, 0, 1);
-    this.rawChartDataBuffer.push(z_amp_visual);
-
-    const CALIBRATION_FACTOR = 0.263;
-    const forceValue = rawZTotal * CALIBRATION_FACTOR;
-    this.forceChartDataBuffer.push(forceValue);
 
     // 如果总压力太小，视为无操作
     if (z_amp_visual < PRESS_THR) {
+      // 即使无操作，也记录数据（零值），保持图表连续性
+      this.rawChartDataBuffer.push({ x: 0, y: 0, z: 0 });
+      const CALIBRATION_FACTOR = 0.263;
+      this.forceChartDataBuffer.push(0);
       return { x: 0, y: 0, intensity: 0 };
     }
 
-    // ================== 核心升级：重心法计算坐标 ==================
+    // 3. ================== 核心升级：重心法计算坐标 ==================
     let weightedX = 0;
     let weightedY = 0;
 
     for (let i = 0; i < 4; i++) {
       const w = weights[i];
-      // 简单的线性加权
+      // 简单的线性加权：根据传感器位置和权重计算加权坐标
       weightedX += SENSOR_POSITIONS[i].x * w;
       weightedY += SENSOR_POSITIONS[i].y * w;
     }
 
-    // 归一化坐标
-    let x_pos = weightedX / totalWeight;
-    let y_pos = weightedY / totalWeight;
+    // 归一化坐标：将加权坐标除以总权重，得到归一化的位置 (-1 到 1)
+    let x_pos = totalWeight > 0 ? weightedX / totalWeight : 0;
+    let y_pos = totalWeight > 0 ? weightedY / totalWeight : 0;
 
     // 翻转修正 (保留之前的逻辑)
     if (INVERT_X) x_pos = -x_pos;
-    if (INVERT_Y) y_pos = -y_pos; // 注意：如果传感器位置定义得当，可能不需要这个翻转了
+    if (INVERT_Y) y_pos = -y_pos;
 
     // 限制范围
     x_pos = THREE.MathUtils.clamp(x_pos, -1, 1);
     y_pos = THREE.MathUtils.clamp(y_pos, -1, 1);
     // ==========================================================
+
+    // 4. 计算 X, Y, Z 三轴的原始数据值（用于图表显示）
+    // X 和 Y 轴：使用归一化后的位置坐标
+    // Z 轴：使用归一化后的压力值
+    const x_amp = x_pos; // X 轴数据：位置坐标 (-1 到 1)
+    const y_amp = y_pos; // Y 轴数据：位置坐标 (-1 到 1)
+    const z_amp = z_amp_visual; // Z 轴数据：压力值 (0 到 1)
+
+    // 5. 将三轴数据作为对象推入图表缓冲区
+    this.rawChartDataBuffer.push({
+      x: x_amp,
+      y: y_amp,
+      z: z_amp,
+    });
+
+    // 6. 计算标定后的力值（用于力值图表）
+    const CALIBRATION_FACTOR = 0.263;
+    const forceValue = rawZTotal * CALIBRATION_FACTOR;
+    this.forceChartDataBuffer.push(forceValue);
 
     // 强度计算保持不变，或者使用 maxWeight 来表示峰值强度
     const intensity_raw = (z_amp_visual - PRESS_THR) / (1 - PRESS_THR);

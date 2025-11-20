@@ -2,10 +2,119 @@
 html, body {
     height: 100%;
     margin: 0;
-    background: #0b0b0b;
+    /* 移除纯黑背景，改为透明，以便显示底下的极光层 */
+    background: transparent;
     color: #e2e8f0;
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
     overflow: hidden;
+}
+
+/* ================== 极光背景组件 ================== */
+.aurora-container {
+    position: fixed;
+    /* 使用 fixed 确保永远全屏且不动 */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    /* 关键：放在最底层 */
+    
+    background: radial-gradient(
+        ellipse at 20% 30%,
+        rgba(138, 43, 226, 0.8) 0%,
+        rgba(138, 43, 226, 0) 60%
+    ),
+    radial-gradient(
+        ellipse at 80% 50%,
+        rgba(0, 191, 255, 0.7) 0%,
+        rgba(0, 191, 255, 0) 70%
+    ),
+    radial-gradient(
+        ellipse at 50% 80%,
+        rgba(50, 205, 50, 0.6) 0%,
+        rgba(50, 205, 50, 0) 65%
+    ),
+    linear-gradient(135deg, #000000 0%, #0a0520 100%);
+    background-blend-mode: overlay, screen, hard-light;
+    overflow: hidden;
+    animation: aurora-drift 25s infinite alternate ease-in-out;
+}
+
+.aurora-container::before {
+    content: "";
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    top: -50%;
+    left: -50%;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.02) 0px,
+        rgba(255, 255, 255, 0.02) 1px,
+        transparent 1px,
+        transparent 40px
+    ),
+    repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.03) 0px,
+        rgba(255, 255, 255, 0.03) 1px,
+        transparent 1px,
+        transparent 60px
+    );
+    animation: grid-shift 20s linear infinite;
+}
+
+.aurora-container::after {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+        circle at center,
+        transparent 70%,
+        rgba(10, 5, 32, 0.9) 100%
+    );
+    animation: aurora-pulse 8s infinite alternate;
+}
+
+@keyframes aurora-drift {
+    0% {
+        background-position: 0% 0%, 0% 0%, 0% 0%;
+        filter: hue-rotate(0deg) brightness(1);
+    }
+    50% {
+        background-position: -10% -5%, 5% 10%, 0% 15%;
+        filter: hue-rotate(30deg) brightness(1.2);
+    }
+    100% {
+        background-position: 5% 10%, -10% -5%, 15% 0%;
+        filter: hue-rotate(60deg) brightness(1);
+    }
+}
+
+@keyframes grid-shift {
+    0% {
+        transform: translate(0, 0);
+    }
+    100% {
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes aurora-pulse {
+    0% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.05);
+    }
+    100% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
 }
 
 /* ================== 应用容器组件 ================== */
@@ -265,19 +374,32 @@ input[type=file] {
 /* ================== 数据面板组件 ================== */
 #data-panel {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 25%;
-    min-width: 500px;
-    height: calc(100% - 20px);
-    background-color: transparent;
-    border: none;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 5;
-    pointer-events: none;
+    
+        /* --- 修改开始：改为上下拉伸，填满右侧垂直空间 --- */
+        top: 20px;
+        /* 距离顶部 20px */
+        bottom: 20px;
+        /* 距离底部 20px */
+        right: 20px;
+        /* 距离右侧 20px */
+        height: auto;
+        /* 移除固定高度，让 top/bottom 决定高度 */
+        /* --- 修改结束 ----------------------------------- */
+    
+        /* ================== 修改：宽度增加到 1/3 ================== */
+        width: 33.33%;
+        min-width: 400px; /* 稍微增加最小宽度，保证在大屏和小屏上都不拥挤 */
+        max-width: 800px; /* 放宽最大宽度限制 */
+        /* ======================================================== */
+    
+        background-color: transparent;
+        border: none;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 5;
+        pointer-events: none;
 }
 
 #data-panel > * {
@@ -299,12 +421,12 @@ input[type=file] {
 }
 
 .chart-widget .panel-title {
-    font-size: 18px;
+    font-size: 11px; /* 从 12px 减小到 11px，节省垂直空间 */
     font-weight: 600;
     color: #a0aec0;
     text-transform: uppercase;
     letter-spacing: 3.0px;
-    padding: 10px 12px;
+    padding: 6px 8px; /* 减小内边距，从 10px 12px 改为 6px 8px */
     border-bottom: none;
     margin: 0;
     background-color: transparent;
@@ -336,3 +458,13 @@ input[type=file] {
     height: 100%;
     filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
 }
+
+/* ================== 图表高度比例类 ================== */
+.chart-flex-1 {
+    flex: 1;
+}
+
+.chart-flex-2 {
+    flex: 2;
+}
+/* ======================================================== */

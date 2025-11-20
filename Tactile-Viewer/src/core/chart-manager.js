@@ -3,13 +3,22 @@ Chart.register(...registerables);
 
 const MAX_DATA_POINTS = 100;
 
-// ================== 升级：创建带渐变填充的图表配置 ==================
+// 通用图表配置生成器
 function createChartConfig(ctx, label, color, yMin, yMax) {
-  // 创建线性渐变
+  // 创建渐变背景
   const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-  gradient.addColorStop(0, `${color}60`); // 顶部颜色 (38% 透明度)
-  gradient.addColorStop(0.8, `${color}10`); // 中下部颜色 (6% 透明度)
-  gradient.addColorStop(1, `${color}00`); // 底部完全透明
+
+  // 简单的颜色转换辅助函数 (Hex/RGB -> RGBA)
+  // 为了简单起见，这里假设传入的是 RGBA 字符串或者标准颜色名，我们手动拼接透明度
+  // 或者我们可以直接在调用时传入基础色，这里简单处理一下
+
+  // 这是一个更通用的渐变生成逻辑
+  // 我们假设传入的 color 是类似 'rgba(255, 0, 0, 1)' 的格式
+  // 简单的替换 alpha 值
+  const colorBase = color.replace(/[\d.]+\)$/g, ""); // 移除最后的透明度部分 '1)'
+
+  gradient.addColorStop(0, `${colorBase} 0.4)`);
+  gradient.addColorStop(1, `${colorBase} 0)`);
 
   return {
     type: "line",
@@ -19,11 +28,11 @@ function createChartConfig(ctx, label, color, yMin, yMax) {
         {
           label: label,
           data: new Array(MAX_DATA_POINTS).fill(0),
-          borderColor: color, // 使用新的活力颜色
-          backgroundColor: gradient, // 应用渐变
+          borderColor: color,
+          backgroundColor: gradient,
           borderWidth: 2,
           fill: true,
-          tension: 0.4,
+          tension: 0.4, // 平滑曲线
           pointRadius: 0,
         },
       ],
@@ -36,67 +45,94 @@ function createChartConfig(ctx, label, color, yMin, yMax) {
         y: {
           min: yMin,
           max: yMax,
-          ticks: { color: "#9ca3af", font: { size: 10 } },
-          grid: {
-            color: "rgba(255, 255, 255, 0.05)", // 网格线调得更暗
-          },
+          ticks: { color: "#9ca3af", font: { size: 9 } }, // 字体稍微改小一点
+          grid: { color: "rgba(255, 255, 255, 0.05)" },
         },
       },
-      plugins: {
-        legend: { display: false },
-      },
+      plugins: { legend: { display: false } },
       animation: { duration: 0 },
     },
   };
 }
 
 export class ChartManager {
-  constructor(rawCanvasId, forceCanvasId, options = {}) {
-    const rawCtx = document.getElementById(rawCanvasId).getContext("2d");
-    const forceCtx = document.getElementById(forceCanvasId).getContext("2d");
+  constructor(ids, options = {}) {
+    // ids = { x: 'id', y: 'id', z: 'id', f: 'id' }
 
-    // ================== 升级：使用新的活力颜色 ==================
-    const vibrantGreen = "#00ff9d"; // 活力薄荷绿
-    const vibrantAmber = "#ffc300"; // 活力琥珀色
+    const ctxX = document.getElementById(ids.x).getContext("2d");
+    const ctxY = document.getElementById(ids.y).getContext("2d");
+    const ctxZ = document.getElementById(ids.z).getContext("2d");
+    const ctxF = document.getElementById(ids.f).getContext("2d");
 
-    this.rawChart = new Chart(
-      rawCtx,
+    // X轴: 红色 (-1 ~ 1)
+    this.chartX = new Chart(
+      ctxX,
+      createChartConfig(ctxX, "X", "rgba(255, 82, 82, 1)", -1.0, 1.0)
+    );
+
+    // Y轴: 绿色 (-1 ~ 1)
+    this.chartY = new Chart(
+      ctxY,
+      createChartConfig(ctxY, "Y", "rgba(105, 240, 174, 1)", -1.0, 1.0)
+    );
+
+    // Z轴: 蓝色 (0 ~ 1, 原始值)
+    this.chartZ = new Chart(
+      ctxZ,
       createChartConfig(
-        rawCtx,
-        "原始值",
-        vibrantGreen,
+        ctxZ,
+        "Z",
+        "rgba(68, 138, 255, 1)",
         0,
-        options.rawMax || 1.0
+        options.rawMax || 0.6
       )
     );
 
-    this.forceChart = new Chart(
-      forceCtx,
+    // 力值: 琥珀色 (0 ~ 12)
+    this.chartF = new Chart(
+      ctxF,
       createChartConfig(
-        forceCtx,
-        "力值 (N)",
-        vibrantAmber,
+        ctxF,
+        "Force",
+        "rgba(255, 195, 0, 1)",
         0,
         options.forceMax || 12.0
       )
     );
   }
 
-  _updateChart(chart, newDataArray) {
+  _updateSingleChart(chart, newDataArray) {
     if (!newDataArray || newDataArray.length === 0) return;
     const data = chart.data.datasets[0].data;
-    data.push(...newDataArray);
-    if (data.length > MAX_DATA_POINTS) {
-      data.splice(0, data.length - MAX_DATA_POINTS);
+
+    // 批量推入数据
+    for (let val of newDataArray) {
+      data.push(val);
+      if (data.length > MAX_DATA_POINTS) data.shift();
     }
-    chart.update("none"); // 'none' 参数可以获得更快的实时更新
+    chart.update("none");
   }
 
-  updateRawChart(newDataArray) {
-    this._updateChart(this.rawChart, newDataArray);
-  }
+  updateCharts(rawArray, forceArray) {
+    if (!rawArray || rawArray.length === 0) return;
 
-  updateForceChart(newDataArray) {
-    this._updateChart(this.forceChart, newDataArray);
+    // 1. 准备数据数组
+    const xData = [],
+      yData = [],
+      zData = [];
+    for (let item of rawArray) {
+      // 数据清洗，防止 NaN
+      xData.push(item && !isNaN(item.x) ? item.x : 0);
+      yData.push(item && !isNaN(item.y) ? item.y : 0);
+      zData.push(item && !isNaN(item.z) ? item.z : 0);
+    }
+
+    // 2. 分别更新
+    this._updateSingleChart(this.chartX, xData);
+    this._updateSingleChart(this.chartY, yData);
+    this._updateSingleChart(this.chartZ, zData);
+
+    // 3. 更新力值
+    this._updateSingleChart(this.chartF, forceArray);
   }
 }
