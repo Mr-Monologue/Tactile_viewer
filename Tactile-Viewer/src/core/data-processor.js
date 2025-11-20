@@ -10,17 +10,15 @@ const PRESS_THR = 0.01;
 
 // 在文件顶部定义传感器位置布局
 const SENSOR_POSITIONS = [
-  { x: 1, y: 1 }, // Chip 0: 左上
-  { x: -1, y: 1 }, // Chip 1: 右上
-  { x: 1, y: -1 }, // Chip 2: 左下
-  { x: -1, y: -1 }, // Chip 3: 右下
-  // 注意：请根据您的实际硬件布局调整这个顺序！
-  // 如果您的CHIP_MAP映射不同，这里的顺序也要对应调整。
+  { x: 1, y: 1 }, // Chip 0 (物理左上): 坐标设为 "1" (逻辑右)
+  { x: -1, y: 1 }, // Chip 1 (物理右上): 坐标设为 "-1" (逻辑左)
+  { x: 1, y: -1 }, // Chip 2 (物理左下): 坐标设为 "1" (逻辑右)
+  { x: -1, y: -1 }, // Chip 3 (物理右下): 坐标设为 "-1" (逻辑左)
 ];
 
 // ================== 新增：方向反转控制开关 ==================
 // 如果发现X轴左右反了，请将此项改为 true
-const INVERT_X = true;
+const INVERT_X = false;
 // 如果发现Y轴上下反了，请将此项改为 true
 const INVERT_Y = false; // 根据Python代码，Y轴很可能需要反转
 // ==========================================================
@@ -41,7 +39,7 @@ export class DataProcessor {
     this.zeroSum.forEach((v) => v.set(0, 0, 0));
     this.zeroCount = 0;
     this.isCalibrating = true;
-    console.log("开始零点校准...");
+    // console.log("开始零点校准...");
   }
 
   // 处理原始的12个浮点数数组
@@ -59,10 +57,10 @@ export class DataProcessor {
         v.clone().multiplyScalar(1 / this.zeroCount)
       );
       this.isCalibrating = false;
-      console.log(
-        "✅ 零点基线采集完成!",
-        this.zeroBaseline.map((v) => v.toArray())
-      );
+      // console.log(
+      //   "✅ 零点基线采集完成!",
+      //   this.zeroBaseline.map((v) => v.toArray())
+      // );
       // 返回true表示校准完成
       return true;
     }
@@ -95,7 +93,7 @@ export class DataProcessor {
   // 处理实时数据并返回最终的按压信息
   process(packet) {
     if (!this.zeroBaseline) {
-      console.warn("尚未校准，无法处理数据。");
+      // console.warn("尚未校准，无法处理数据。");
       return null;
     }
 
@@ -103,22 +101,29 @@ export class DataProcessor {
 
     // 1. 计算每个传感器的独立 Z 轴压力值 (权重)
     const weights = [];
+    const delta = [];
     let totalWeight = 0;
     let maxWeight = 0;
 
     for (let i = 0; i < 4; i++) {
       // 计算该传感器的变化向量
-      const delta = currentVectors[i].clone().sub(this.zeroBaseline[i]);
+      const d = currentVectors[i].clone().sub(this.zeroBaseline[i]);
+      delta.push(d);
 
       // 取Z轴绝对值作为该传感器的压力权重
       // 这里可以加一个微小的死区或噪声过滤
-      let w = Math.abs(delta.z);
+      let w = Math.abs(d.z);
       if (w < 2.0) w = 0; // 过滤掉底噪
 
       weights.push(w);
       totalWeight += w;
       if (w > maxWeight) maxWeight = w;
     }
+
+    // console.log(
+    //   "Delta Z:",
+    //   delta.map((v) => v.z.toFixed(1))
+    // );
 
     // 将原始总压力推入图表缓冲区
     const rawZTotal = totalWeight / 4; // 取平均值作为总压力指标
@@ -160,7 +165,7 @@ export class DataProcessor {
 
     // 强度计算保持不变，或者使用 maxWeight 来表示峰值强度
     const intensity_raw = (z_amp_visual - PRESS_THR) / (1 - PRESS_THR);
-    const z_gain = 2.5;
+    const z_gain = 3.5;
     const intensity = Math.min(intensity_raw * z_gain, 1.0);
 
     return {
